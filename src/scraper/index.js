@@ -93,27 +93,10 @@ function getAccessToken(oAuth2Client, callback) {
 //   }
 
 function getZipFileNames(drive) {
-  let driveFiles = null;
-  drive.files.list(
-    {
-      pageSize: 10,
-      fields: "nextPageToken, files(id, name)",
-    },
-    (err, res) => {
-      if (err) return console.log("The API returned an error: " + err);
-
-      const files = res.data.files;
-      const pageToken = null,
-        folderId = null;
-
-      if (files.length) {
-        console.log("Files:");
-        console.log(">>>", files.length);
-        driveFiles = files;
-      }
-    }
-  );
-  console.log("..", driveFiles);
+  return drive.files
+    .list({ pageSize: 10, fields: "nextPageToken, files(id, name)" })
+    .then((files) => files.data.files)
+    .catch((err) => console.log("error : ", err));
 }
 
 function listFiles(auth) {
@@ -124,14 +107,19 @@ function listFiles(auth) {
   //   let zipFileNames =[].concat(getZipFileNames(drive));
   console.log(getZipFileNames(drive));
 
-  drive.files
-    .get({
-      fileId: fileId,
-      alt: "media",
-    })
-    .then((res) => {
-      console.log(">", zipFileNames);
-    });
+  getZipFileNames(drive).then((fileNames) => {
+    console.log("do something with filenames");
+    console.log(fileNames);
+  });
+
+  // drive.files
+  //   .get({
+  //     fileId: fileId,
+  //     alt: "media",
+  //   })
+  //   .then((res) => {
+  //     console.log(">", res);
+  //   });
 }
 
 //   if (zipFileNames.length > 0) {

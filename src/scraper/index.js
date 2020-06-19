@@ -104,9 +104,6 @@ function listFiles(auth) {
   const fileId = "1_tCKjPYcjIfnloGiF318bbwUl7yI7u6U";
   var dest = fs.createWriteStream("/tmp/whatsapp_dump.zip");
 
-  //   let zipFileNames =[].concat(getZipFileNames(drive));
-  console.log(getZipFileNames(drive));
-
   getZipFileNames(drive).then((fileNames) => {
     console.log("do something with filenames");
     console.log(fileNames);

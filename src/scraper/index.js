@@ -1,9 +1,10 @@
 const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
-const jszip = require("jszip");
 const { google } = require("googleapis");
-const { files } = require("jszip");
+const AdmZip = require("adm-zip");
+
+const md5File = require("md5-file");
 
 // If modifying these scopes, delete token.json.
 const SCOPES = ["https://www.googleapis.com/auth/drive"];
@@ -86,9 +87,11 @@ function getAccessToken(oAuth2Client, callback) {
 
 function ensureDirectoryExistence(filePath) {
   var dirname = path.dirname(filePath);
+
   if (fs.existsSync(dirname)) {
     return true;
   }
+
   ensureDirectoryExistence(dirname);
   fs.mkdirSync(dirname);
 }
@@ -141,9 +144,22 @@ function downloadFiles(file, drive) {
 function listFiles(auth) {
   const drive = google.drive({ version: "v3", auth });
   getFileNames(drive).then((fileNames) => {
-    let zips = fileNames.files.map(function (file) {
+    fileNames.files.map(function (file) {
       if (file.name.includes(".zip")) {
-        downloadFiles(file, drive);
+        downloadFiles(file, drive).then((r) => {
+          md5File(r)
+            .then((hash) => {
+              return { fileName: r, hash: hash };
+              // getting the checksum here, for version control
+            })
+            .then((res) => {
+              var zip = new AdmZip(res.fileName);
+              const unzipDirPath = `./unzipped files/${file.name}`;
+              ensureDirectoryExistence(unzipDirPath);
+              console.log("here");
+              zip.extractAllTo(unzipDirPath, /*overwrite*/ true);
+            });
+        });
       }
     });
   });

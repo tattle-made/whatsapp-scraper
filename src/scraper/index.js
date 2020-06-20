@@ -1,4 +1,5 @@
 const fs = require("fs");
+const path = require("path");
 const readline = require("readline");
 const jszip = require("jszip");
 const { google } = require("googleapis");
@@ -83,11 +84,49 @@ function getAccessToken(oAuth2Client, callback) {
  *  https://developers.google.com/drive/api/v2/manage-revisions
  */
 
+function ensureDirectoryExistence(filePath) {
+  var dirname = path.dirname(filePath);
+  if (fs.existsSync(dirname)) {
+    return true;
+  }
+  ensureDirectoryExistence(dirname);
+  fs.mkdirSync(dirname);
+}
+
 function getFileNames(drive) {
   return drive.files
     .list({ pageSize: 10, fields: "nextPageToken, files(id, name)" })
     .then((files) => files.data)
     .catch((err) => console.log("error : ", err));
+}
+
+function downloadFiles(res, file) {
+  return new Promise((resolve, reject) => {
+    const filePath = `./zip files/${file.name}`;
+    ensureDirectoryExistence(filePath);
+    console.log(`writing to ${filePath}`);
+    const dest = fs.createWriteStream(filePath);
+    let progress = 0;
+
+    res.data
+      .on("end", () => {
+        console.log(`\nDone downloading ${file.name}`);
+        resolve(filePath);
+      })
+      .on("error", (err) => {
+        console.error("Error downloading file.");
+        reject(err);
+      })
+      .on("data", (d) => {
+        progress += d.length;
+        if (process.stdout.isTTY) {
+          process.stdout.clearLine();
+          process.stdout.cursorTo(0);
+          process.stdout.write(`Downloaded ${progress} bytes`);
+        }
+      })
+      .pipe(dest);
+  });
 }
 
 function listFiles(auth) {
@@ -98,10 +137,6 @@ function listFiles(auth) {
   getFileNames(drive).then((fileNames) => {
     let zips = fileNames.files.map(function (file) {
       if (file.name.includes(".zip")) {
-        // return file;
-        // download and unzip file here
-        console.log(file.id);
-
         var fileId = file.id;
         var dest = fs.createWriteStream(file.name);
         drive.files
@@ -113,31 +148,7 @@ function listFiles(auth) {
             { responseType: "stream" }
           )
           .then((res) => {
-            return new Promise((resolve, reject) => {
-              const filePath = `./${file.name}`;
-              console.log(`writing to ${filePath}`);
-              const dest = fs.createWriteStream(filePath);
-              let progress = 0;
-
-              res.data
-                .on("end", () => {
-                  console.log("Done downloading file.");
-                  resolve(filePath);
-                })
-                .on("error", (err) => {
-                  console.error("Error downloading file.");
-                  reject(err);
-                })
-                .on("data", (d) => {
-                  progress += d.length;
-                  if (process.stdout.isTTY) {
-                    process.stdout.clearLine();
-                    process.stdout.cursorTo(0);
-                    process.stdout.write(`Downloaded ${progress} bytes`);
-                  }
-                })
-                .pipe(dest);
-            });
+            downloadFiles(res, file);
           });
       }
     });

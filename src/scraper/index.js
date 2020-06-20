@@ -2,6 +2,7 @@ const fs = require("fs");
 const readline = require("readline");
 const jszip = require("jszip");
 const { google } = require("googleapis");
+const { files } = require("jszip");
 
 // If modifying these scopes, delete token.json.
 const SCOPES = ["https://www.googleapis.com/auth/drive"];
@@ -82,55 +83,63 @@ function getAccessToken(oAuth2Client, callback) {
  *  https://developers.google.com/drive/api/v2/manage-revisions
  */
 
-// get a folderId
-// service.files.list({auth: auth,
-//     resource: { parents: [ folderId ] },
-//     q: "tattle-wa-scraper",
-//     fields: '*',
-//     spaces: 'drive',
-//     pageToken: pageToken,
-//     auth: auth
-//   }
-
-function getZipFileNames(drive) {
+function getFileNames(drive) {
   return drive.files
     .list({ pageSize: 10, fields: "nextPageToken, files(id, name)" })
-    .then((files) => files.data.files)
+    .then((files) => files.data)
     .catch((err) => console.log("error : ", err));
 }
 
 function listFiles(auth) {
   const drive = google.drive({ version: "v3", auth });
-  const fileId = "1_tCKjPYcjIfnloGiF318bbwUl7yI7u6U";
-  var dest = fs.createWriteStream("/tmp/whatsapp_dump.zip");
 
-  getZipFileNames(drive).then((fileNames) => {
-    console.log("do something with filenames");
-    console.log(fileNames);
+  let dest = fs.createWriteStream("/tmp/zips");
+
+  getFileNames(drive).then((fileNames) => {
+    let zips = fileNames.files.map(function (file) {
+      if (file.name.includes(".zip")) {
+        // return file;
+        // download and unzip file here
+        console.log(file.id);
+
+        var fileId = file.id;
+        var dest = fs.createWriteStream(file.name);
+        drive.files
+          .get(
+            {
+              fileId: fileId,
+              alt: "media",
+            },
+            { responseType: "stream" }
+          )
+          .then((res) => {
+            return new Promise((resolve, reject) => {
+              const filePath = `./${file.name}`;
+              console.log(`writing to ${filePath}`);
+              const dest = fs.createWriteStream(filePath);
+              let progress = 0;
+
+              res.data
+                .on("end", () => {
+                  console.log("Done downloading file.");
+                  resolve(filePath);
+                })
+                .on("error", (err) => {
+                  console.error("Error downloading file.");
+                  reject(err);
+                })
+                .on("data", (d) => {
+                  progress += d.length;
+                  if (process.stdout.isTTY) {
+                    process.stdout.clearLine();
+                    process.stdout.cursorTo(0);
+                    process.stdout.write(`Downloaded ${progress} bytes`);
+                  }
+                })
+                .pipe(dest);
+            });
+          });
+      }
+    });
   });
-
-  // drive.files
-  //   .get({
-  //     fileId: fileId,
-  //     alt: "media",
-  //   })
-  //   .then((res) => {
-  //     console.log(">", res);
-  //   });
 }
-
-//   if (zipFileNames.length > 0) {
-//     console.log("here");
-//     console.log(zipFileNames);
-//   }
-
-//   console.log(res.data);
-// is the file
-
-// .on("end", function () {
-//     console.log("Done");
-// })
-// .on("error", function (err) {
-//     console.log("Error during download", err);
-// })
-// .pipe(dest);

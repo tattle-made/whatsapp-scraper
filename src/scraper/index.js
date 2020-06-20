@@ -100,56 +100,50 @@ function getFileNames(drive) {
     .catch((err) => console.log("error : ", err));
 }
 
-function downloadFiles(res, file) {
+function downloadFiles(file, drive) {
   return new Promise((resolve, reject) => {
     const filePath = `./zip files/${file.name}`;
     ensureDirectoryExistence(filePath);
     console.log(`writing to ${filePath}`);
     const dest = fs.createWriteStream(filePath);
     let progress = 0;
-
-    res.data
-      .on("end", () => {
-        console.log(`\nDone downloading ${file.name}`);
-        resolve(filePath);
-      })
-      .on("error", (err) => {
-        console.error("Error downloading file.");
-        reject(err);
-      })
-      .on("data", (d) => {
-        progress += d.length;
-        if (process.stdout.isTTY) {
-          process.stdout.clearLine();
-          process.stdout.cursorTo(0);
-          process.stdout.write(`Downloaded ${progress} bytes`);
-        }
-      })
-      .pipe(dest);
+    drive.files
+      .get(
+        {
+          fileId: file.id,
+          alt: "media",
+        },
+        { responseType: "stream" }
+      )
+      .then((res) => {
+        res.data
+          .on("end", () => {
+            console.log(`\nDone downloading ${file.name}`);
+            resolve(filePath);
+          })
+          .on("error", (err) => {
+            console.error("Error downloading file.");
+            reject(err);
+          })
+          .on("data", (d) => {
+            progress += d.length;
+            if (process.stdout.isTTY) {
+              process.stdout.clearLine();
+              process.stdout.cursorTo(0);
+              process.stdout.write(`Downloaded ${progress} bytes`);
+            }
+          })
+          .pipe(dest);
+      });
   });
 }
 
 function listFiles(auth) {
   const drive = google.drive({ version: "v3", auth });
-
-  let dest = fs.createWriteStream("/tmp/zips");
-
   getFileNames(drive).then((fileNames) => {
     let zips = fileNames.files.map(function (file) {
       if (file.name.includes(".zip")) {
-        var fileId = file.id;
-        var dest = fs.createWriteStream(file.name);
-        drive.files
-          .get(
-            {
-              fileId: fileId,
-              alt: "media",
-            },
-            { responseType: "stream" }
-          )
-          .then((res) => {
-            downloadFiles(res, file);
-          });
+        downloadFiles(file, drive);
       }
     });
   });

@@ -5,6 +5,7 @@ const readline = require("readline");
 const { google } = require("googleapis");
 const AdmZip = require("adm-zip");
 const md5File = require("md5-file");
+const { resolve } = require("path");
 
 // If modifying these scopes, delete token.json.
 const SCOPES = ["https://www.googleapis.com/auth/drive"];
@@ -103,11 +104,10 @@ function getFileNames(drive) {
     .catch((err) => console.log("error : ", err));
 }
 
-function downloadFiles(file, drive) {
+async function downloadFiles(file, drive) {
   return new Promise((resolve, reject) => {
     const filePath = `./downloaded/${file.name}`;
     ensureDirectoryExistence(filePath);
-    console.log(`writing to ${filePath}`);
     const dest = fs.createWriteStream(filePath);
     let progress = 0;
     drive.files
@@ -137,32 +137,37 @@ function downloadFiles(file, drive) {
             }
           })
           .pipe(dest);
-      });
+      })
+      .then(() => resolve);
   });
 }
 
-function listFiles(auth) {
-  const drive = google.drive({ version: "v3", auth });
+async function processZipFiles(fileNames, drive) {
+  return Promise.all(
+    fileNames.files.map(function (file) {
+      if (file.name.includes(".zip")) {
+        downloadFiles(file, drive).then((r) => {
+          md5File(r)
+            .then((hash) => {
+              return { fileName: r, hash: hash };
+              // getting the checksum here, for version control
+            })
+            .then((res) => {
+              const zip = new AdmZip(res.fileName);
+              const unzipDirPath = `./extracted/${file.name}`;
+              ensureDirectoryExistence(unzipDirPath);
+              zip.extractAllTo(unzipDirPath, /*overwrite*/ true);
+            })
+            .then(() => resolve())
+            .catch((err) => console.error(err));
+        });
+      }
+    })
+  );
+}
 
-  getFileNames(drive).then((fileNames) => {
-    // fileNames.files.map(function (file) {
-    //   if (file.name.includes(".zip")) {
-    //     downloadFiles(file, drive).then((r) => {
-    //       md5File(r)
-    //         .then((hash) => {
-    //           return { fileName: r, hash: hash };
-    //           // getting the checksum here, for version control
-    //         })
-    //         .then((res) => {
-    //           var zip = new AdmZip(res.fileName);
-    //           const unzipDirPath = `./extracted/${file.name}`;
-    //           ensureDirectoryExistence(unzipDirPath);
-    //           zip.extractAllTo(unzipDirPath, /*overwrite*/ true);
-    //         });
-    //     });
-    //   }
-    // });
-
+async function processTxtFiles(fileNames, drive) {
+  return Promise.all(
     fileNames.files.map(function (file) {
       if (file.name.includes(".txt")) {
         //do something with txt files ie exported messages without media
@@ -188,11 +193,25 @@ function listFiles(auth) {
           }
         });
       }
+    })
+  );
+}
+
+function processFiles(auth) {
+  const drive = google.drive({ version: "v3", auth });
+  return new Promise((res, rej) => {
+    getFileNames(drive).then(async (fileNames) => {
+      processZipFiles(fileNames, drive);
+      processTxtFiles(fileNames, drive);
     });
   });
 }
 
-function main(auth) {
+function cleanUp() {
+  console.log("cleanup");
+}
+
+async function main(auth) {
   console.log("main");
-  listFiles(auth);
+  processFiles(auth).then(() => console.log("cu"));
 }

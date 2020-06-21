@@ -179,8 +179,7 @@ async function processTxtFiles(fileNames, drive) {
               let folder = `${src.replace("./downloaded/", "")}`;
               folder = folder.replace(".txt", "");
               let dest = `./extracted/${folder}/${src.replace(
-                "./downloaded/",
-                ""
+                "./downloaded/"
               )}`;
 
               fsx
@@ -207,16 +206,14 @@ function processFiles(auth) {
   });
 }
 
-function cleanUp() {
+function cleanUp(path) {
   console.log("cleaning Up");
-  return Promise.resolve({ msg: "done" });
+  return fsx.remove("./downloaded/");
 }
 
 async function main(auth) {
   console.log("main");
   const drive = google.drive({ version: "v3", auth });
-
-  // processFiles(auth).then(() => console.log("cu"));
 
   getFileNames(drive)
     .then((fileNames) =>
@@ -226,9 +223,7 @@ async function main(auth) {
       ])
     )
     .then((processingResult) => {
-      console.log(processingResult);
       return cleanUp();
     })
-    .then((cleanupResult) => console.log(cleanupResult))
     .catch((err) => console.log("error in main", err));
 }

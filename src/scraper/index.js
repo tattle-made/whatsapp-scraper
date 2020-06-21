@@ -1,9 +1,9 @@
 const fs = require("fs");
+const fsx = require("fs-extra");
 const path = require("path");
 const readline = require("readline");
 const { google } = require("googleapis");
 const AdmZip = require("adm-zip");
-
 const md5File = require("md5-file");
 
 // If modifying these scopes, delete token.json.
@@ -17,7 +17,7 @@ const TOKEN_PATH = "token.json";
 fs.readFile("credentials.json", (err, content) => {
   if (err) return console.log("Error loading client secret file:", err);
   // Authorize a client with credentials, then call the Google Drive API.
-  authorize(JSON.parse(content), listFiles);
+  authorize(JSON.parse(content), main);
 });
 
 /**
@@ -105,7 +105,7 @@ function getFileNames(drive) {
 
 function downloadFiles(file, drive) {
   return new Promise((resolve, reject) => {
-    const filePath = `./zip files/${file.name}`;
+    const filePath = `./downloaded/${file.name}`;
     ensureDirectoryExistence(filePath);
     console.log(`writing to ${filePath}`);
     const dest = fs.createWriteStream(filePath);
@@ -143,24 +143,56 @@ function downloadFiles(file, drive) {
 
 function listFiles(auth) {
   const drive = google.drive({ version: "v3", auth });
+
   getFileNames(drive).then((fileNames) => {
+    // fileNames.files.map(function (file) {
+    //   if (file.name.includes(".zip")) {
+    //     downloadFiles(file, drive).then((r) => {
+    //       md5File(r)
+    //         .then((hash) => {
+    //           return { fileName: r, hash: hash };
+    //           // getting the checksum here, for version control
+    //         })
+    //         .then((res) => {
+    //           var zip = new AdmZip(res.fileName);
+    //           const unzipDirPath = `./extracted/${file.name}`;
+    //           ensureDirectoryExistence(unzipDirPath);
+    //           zip.extractAllTo(unzipDirPath, /*overwrite*/ true);
+    //         });
+    //     });
+    //   }
+    // });
+
     fileNames.files.map(function (file) {
-      if (file.name.includes(".zip")) {
-        downloadFiles(file, drive).then((r) => {
-          md5File(r)
-            .then((hash) => {
-              return { fileName: r, hash: hash };
-              // getting the checksum here, for version control
-            })
-            .then((res) => {
-              var zip = new AdmZip(res.fileName);
-              const unzipDirPath = `./unzipped files/${file.name}`;
-              ensureDirectoryExistence(unzipDirPath);
-              console.log("here");
-              zip.extractAllTo(unzipDirPath, /*overwrite*/ true);
-            });
+      if (file.name.includes(".txt")) {
+        //do something with txt files ie exported messages without media
+        downloadFiles(file, drive).then((fileName) => {
+          try {
+            if (fs.existsSync(fileName)) {
+              //file exists
+              let src = fileName;
+              let folder = `${src.replace("./downloaded/", "")}`;
+              folder = folder.replace(".txt", "");
+              let dest = `./extracted/${folder}/${src.replace(
+                "./downloaded/",
+                ""
+              )}`;
+
+              fsx
+                .move(src, dest)
+                .then(() => console.log("moved .txt file to its own folder"))
+                .catch((err) => console.error(err));
+            }
+          } catch (err) {
+            console.error(err);
+          }
         });
       }
     });
   });
+}
+
+function main(auth) {
+  console.log("main");
+  listFiles(auth);
 }

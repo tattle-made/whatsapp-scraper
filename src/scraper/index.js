@@ -146,7 +146,7 @@ async function processZipFiles(fileNames, drive) {
   return Promise.all(
     fileNames.files.map(function (file) {
       if (file.name.includes(".zip")) {
-        downloadFiles(file, drive).then((r) => {
+        return downloadFiles(file, drive).then((r) => {
           md5File(r)
             .then((hash) => {
               return { fileName: r, hash: hash };
@@ -208,10 +208,27 @@ function processFiles(auth) {
 }
 
 function cleanUp() {
-  console.log("cleanup");
+  console.log("cleaning Up");
+  return Promise.resolve({ msg: "done" });
 }
 
 async function main(auth) {
   console.log("main");
-  processFiles(auth).then(() => console.log("cu"));
+  const drive = google.drive({ version: "v3", auth });
+
+  // processFiles(auth).then(() => console.log("cu"));
+
+  getFileNames(drive)
+    .then((fileNames) =>
+      Promise.all([
+        processZipFiles(fileNames, drive),
+        processTxtFiles(fileNames, drive),
+      ]).then()
+    )
+    .then((processingResult) => {
+      console.log(processingResult);
+      return cleanUp();
+    })
+    .then((cleanupResult) => console.log(cleanupResult))
+    .catch((err) => console.log("error in main", err));
 }

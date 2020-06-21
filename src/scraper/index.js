@@ -223,7 +223,7 @@ async function main(auth) {
       Promise.all([
         processZipFiles(fileNames, drive),
         processTxtFiles(fileNames, drive),
-      ]).then()
+      ])
     )
     .then((processingResult) => {
       console.log(processingResult);

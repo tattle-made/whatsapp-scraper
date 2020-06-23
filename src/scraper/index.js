@@ -7,6 +7,7 @@ const AdmZip = require("adm-zip");
 const md5File = require("md5-file");
 const { resolve } = require("path");
 
+const initMessageParser = require("./messageParser");
 // If modifying these scopes, delete token.json.
 const SCOPES = ["https://www.googleapis.com/auth/drive"];
 // The file token.json stores the user's access and refresh tokens, and is
@@ -166,6 +167,14 @@ async function processZipFiles(fileNames, drive) {
   );
 }
 
+async function moveTxtFilesToFolder(src, dest) {
+  console.log("mtf", src, dest);
+  fsx
+    .move(src, dest, { overwrite: true })
+    .then(() => console.log("moved .txt file to its own folder"))
+    .catch((err) => console.error(err));
+}
+
 async function processTxtFiles(fileNames, drive) {
   return Promise.all(
     fileNames.files.map(function (file) {
@@ -178,14 +187,12 @@ async function processTxtFiles(fileNames, drive) {
               let src = fileName;
               let folder = `${src.replace("./downloaded/", "")}`;
               folder = folder.replace(".txt", "");
-              let dest = `./extracted/${folder}/${src.replace(
-                "./downloaded/"
-              )}`;
 
-              fsx
-                .move(src, dest)
-                .then(() => console.log("moved .txt file to its own folder"))
-                .catch((err) => console.error(err));
+              let dest = `./extracted/${folder}/${src.replace(
+                "./downloaded/",
+                ""
+              )}`;
+              moveTxtFilesToFolder(src, dest);
             }
           } catch (err) {
             console.error(err);
@@ -208,7 +215,10 @@ function processFiles(auth) {
 
 function cleanUp(path) {
   console.log("cleaning Up");
-  return fsx.remove("./downloaded/");
+
+  if (fs.existsSync(path)) {
+    return fsx.remove(path);
+  }
 }
 
 async function main(auth) {
@@ -222,8 +232,6 @@ async function main(auth) {
         processTxtFiles(fileNames, drive),
       ])
     )
-    .then((processingResult) => {
-      return cleanUp();
-    })
-    .catch((err) => console.log("error in main", err));
+    .then(() => initMessageParser())
+    .catch((err) => console.error("error in main", err));
 }

@@ -1,22 +1,18 @@
-//requiring path and fs modules
-const path = require("path");
+const { promisify } = require("util");
+const { resolve } = require("path");
 const fs = require("fs");
-//joining path of directory
+const readdir = promisify(fs.readdir);
+const stat = promisify(fs.stat);
 
-function initMessageParser() {
-  const directoryPath = path.join(__dirname, "extracted");
-  //passsing directoryPath and callback \  +"0"
-  fs.readdir(directoryPath, function (err, files) {
-    //handling error
-    if (err) {
-      return console.log("Unable to scan directory: " + err);
-    }
-    //listing all files using forEach
-    files.forEach(function (file) {
-      // Do whatever you want to do with the file
-      console.log(file);
-    });
-  });
+async function getFiles(dir) {
+  const subdirs = await readdir(dir);
+  const files = await Promise.all(
+    subdirs.map(async (subdir) => {
+      const res = resolve(dir, subdir);
+      return (await stat(res)).isDirectory() ? getFiles(res) : res;
+    })
+  );
+  return files.reduce((a, f) => a.concat(f), []);
 }
 
-module.exports = initMessageParser;
+exports.getFiles = getFiles;

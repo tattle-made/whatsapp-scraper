@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
 const { google } = require("googleapis");
-
+const fsx = require("fs-extra");
 const GD = require("./google-drive");
 const MessageParser = require("./messageParser");
 // If modifying these scopes, delete token.json.
@@ -91,17 +91,68 @@ async function main(auth) {
   GD.getFileNames(drive)
     .then((fileNames) =>
       Promise.all([
-        GD.processZipFiles(fileNames, drive),
-        GD.processTxtFiles(fileNames, drive),
+        // GD.processZipFiles(fileNames, drive),
+        // GD.processTxtFiles(fileNames, drive),
       ])
     )
     .then(() => MessageParser.getFiles("./extracted"))
     .then((files) => {
       files.forEach((file) => {
         if (file.includes(".txt")) {
-          MessageParser.getJSON(file);
+          MessageParser.getJSON(file).then((messages) => {
+            const jsonString = JSON.stringify(messages);
+
+            if (jsonString !== []) {
+              const fileName = "./JSON/" + file;
+              let f = fileName
+                .replace(fileName.substring(0, fileName.lastIndexOf("/")), "")
+                .replace("/", "");
+
+              let jsonFileName =
+                "./JSON/" +
+                f.replace(
+                  ".txt",
+                  "-" + MessageParser.getFormattedDate() + ".json"
+                );
+
+              let jsonFileNameWithoutTimeStamp = f.replace(".txt", "");
+
+              if (
+                jsonFileName.startsWith("./JSON/._") ||
+                jsonString === [] ||
+                jsonString.length === 0
+              ) {
+                return;
+              } else {
+                MessageParser.ensureDir("./JSON/").then(() =>
+                  MessageParser.getFiles("./JSON").then((files) => {
+                    if (files.length) {
+                      files.forEach((file) => {
+                        // old files exist, delete and write new files
+                        fsx.remove(file).then(() => {
+                          MessageParser.writeToJsonFile(
+                            jsonFileName,
+                            jsonString,
+                            false
+                          );
+                        });
+                      });
+                    } else {
+                      // no files inside JSON folder, create some
+                      MessageParser.writeToJsonFile(
+                        jsonFileName,
+                        jsonString,
+                        false
+                      );
+                    }
+                  })
+                );
+              }
+            }
+          });
         }
       });
     })
+
     .catch((err) => console.error("error in main", err));
 }

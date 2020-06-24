@@ -144,3 +144,4 @@ exports.getFileNames = getFileNames;
 exports.processZipFiles = processZipFiles;
 exports.processTxtFiles = processTxtFiles;
 exports.cleanUp = cleanUp;
+exports.ensureDirectoryExistence = ensureDirectoryExistence;

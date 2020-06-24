@@ -91,8 +91,8 @@ async function main(auth) {
   GD.getFileNames(drive)
     .then((fileNames) =>
       Promise.all([
-        // GD.processZipFiles(fileNames, drive),
-        // GD.processTxtFiles(fileNames, drive),
+        GD.processZipFiles(fileNames, drive),
+        GD.processTxtFiles(fileNames, drive),
       ])
     )
     .then(() => MessageParser.getFiles("./extracted"))

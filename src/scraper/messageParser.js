@@ -19,19 +19,17 @@ async function getJSON(file) {
       const jsonString = JSON.stringify(messages);
       if (jsonString !== []) {
         const fileName = "./JSON/" + file;
-        if (fs.existsSync(fileName)) {
+        let f = fileName
+          .replace(fileName.substring(0, fileName.lastIndexOf("/")), "")
+          .replace("/", "")
+          .replace(".txt", ".json");
+        let jsonFileName = "./JSON/" + f;
+
+        if (fs.existsSync(jsonFileName)) {
           // file already exists in JSON dir
           console.log("file exists");
           return true;
         } else {
-          let f = fileName
-            .replace(fileName.substring(0, fileName.lastIndexOf("/")), "")
-            .replace("/", "")
-            .replace(".txt", ".json");
-          console.log(">>", f, "\n");
-
-          let jsonFileName = "./JSON/" + f;
-
           fsx
             .outputFile(jsonFileName, jsonString)
             .then(() => {

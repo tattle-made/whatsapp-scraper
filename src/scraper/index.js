@@ -98,7 +98,9 @@ async function main(auth) {
     .then(() => MessageParser.getFiles("./extracted"))
     .then((files) => {
       files.forEach((file) => {
-        console.log(file.replace(__dirname + "/extracted/", ""));
+        if (file.includes(".txt")) {
+          MessageParser.getJSON(file);
+        }
       });
     })
     .catch((err) => console.error("error in main", err));

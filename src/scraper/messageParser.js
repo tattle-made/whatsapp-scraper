@@ -10,42 +10,75 @@ const GD = require("./google-drive");
 // var whatsappMessagesParser = require("./wa-parser");
 const whatsapp = require("whatsapp-chat-parser");
 
+function getFormattedDate() {
+  var date = new Date();
+
+  var month = date.getMonth() + 1;
+  var day = date.getDate();
+  var hour = date.getHours();
+  var min = date.getMinutes();
+  var sec = date.getSeconds();
+
+  month = (month < 10 ? "0" : "") + month;
+  day = (day < 10 ? "0" : "") + day;
+  hour = (hour < 10 ? "0" : "") + hour;
+  min = (min < 10 ? "0" : "") + min;
+  sec = (sec < 10 ? "0" : "") + sec;
+
+  var str =
+    date.getFullYear() +
+    "-" +
+    month +
+    "-" +
+    day +
+    "_" +
+    hour +
+    ":" +
+    min +
+    ":" +
+    sec;
+
+  /*alert(str);*/
+
+  return str;
+}
+
 async function getJSON(file) {
   const fileContents = fs.readFileSync(file, "utf8");
-  whatsapp
-    .parseString(fileContents)
-    .then((messages) => {
-      // Do whatever you want with messages
-      const jsonString = JSON.stringify(messages);
-      if (jsonString !== []) {
-        const fileName = "./JSON/" + file;
-        let f = fileName
-          .replace(fileName.substring(0, fileName.lastIndexOf("/")), "")
-          .replace("/", "")
-          .replace(".txt", ".json");
-        let jsonFileName = "./JSON/" + f;
 
-        if (fs.existsSync(jsonFileName)) {
-          // file already exists in JSON dir
-          console.log("file exists");
-          return true;
-        } else {
-          fsx
-            .outputFile(jsonFileName, jsonString)
-            .then(() => {
-              console.log("The file was saved!");
-            })
-            .catch((err) => {
-              console.error(err);
-            });
-        }
-      }
-    })
-    .catch((err) => {
-      // Something went wrong
-      console.error(err);
-    });
+  return whatsapp.parseString(fileContents).catch((err) => {
+    // Something went wrong
+    console.error(err);
+  });
 }
+
+async function writeToJsonFile(file, data, del) {
+  if (del) {
+    try {
+      fsx.remove(file).then(() => {
+        fsx.outputFile(file, data);
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  } else {
+    try {
+      await fsx.outputFile(file, data);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+}
+
+async function ensureDir(directory) {
+  try {
+    await fsx.ensureDir(directory);
+    console.log("success!");
+  } catch (err) {
+    console.error(err);
+  }
+}
+
 async function getFiles(dir) {
   const subdirs = await readdir(dir);
   const files = await Promise.all(
@@ -59,3 +92,6 @@ async function getFiles(dir) {
 
 exports.getFiles = getFiles;
 exports.getJSON = getJSON;
+exports.getFormattedDate = getFormattedDate;
+exports.writeToJsonFile = writeToJsonFile;
+exports.ensureDir = ensureDir;

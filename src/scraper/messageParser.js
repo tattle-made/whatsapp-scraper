@@ -4,6 +4,22 @@ const fs = require("fs");
 const readdir = promisify(fs.readdir);
 const stat = promisify(fs.stat);
 
+// var whatsappMessagesParser = require("./wa-parser");
+const whatsapp = require("whatsapp-chat-parser");
+
+async function getJSON(file) {
+  const fileContents = fs.readFileSync(file, "utf8");
+  whatsapp
+    .parseString(fileContents)
+    .then((messages) => {
+      // Do whatever you want with messages
+      console.log(messages);
+    })
+    .catch((err) => {
+      // Something went wrong
+      console.error(err);
+    });
+}
 async function getFiles(dir) {
   const subdirs = await readdir(dir);
   const files = await Promise.all(
@@ -16,3 +32,4 @@ async function getFiles(dir) {
 }
 
 exports.getFiles = getFiles;
+exports.getJSON = getJSON;

@@ -24,7 +24,8 @@ function getFileNames(drive) {
     .catch((err) => console.log("error : ", err));
 }
 
-async function downloadFiles(file, drive) {
+async function downloadFiles(file, drive, verbose) {
+  // TODO : Skip if already downloaded
   return new Promise((resolve, reject) => {
     const filePath = `./downloaded/${file.name}`;
     ensureDirectoryExistence(filePath);
@@ -41,7 +42,7 @@ async function downloadFiles(file, drive) {
       .then((res) => {
         res.data
           .on("end", () => {
-            console.log(`\nDone downloading ${file.name}`);
+            verbose && console.log(`\nDone downloading ${file.name}`);
             resolve(filePath);
           })
           .on("error", (err) => {
@@ -53,7 +54,7 @@ async function downloadFiles(file, drive) {
             if (process.stdout.isTTY) {
               process.stdout.clearLine();
               process.stdout.cursorTo(0);
-              process.stdout.write(`Downloaded ${progress} bytes`);
+              verbose && process.stdout.write(`Downloaded ${progress} bytes`);
             }
           })
           .pipe(dest);
@@ -66,7 +67,7 @@ async function processZipFiles(fileNames, drive) {
   return Promise.all(
     fileNames.files.map(function (file) {
       if (file.name.includes(".zip")) {
-        return downloadFiles(file, drive).then((r) => {
+        return downloadFiles(file, drive, false).then((r) => {
           md5File(r)
             .then((hash) => {
               return { fileName: r, hash: hash };
@@ -99,7 +100,7 @@ async function processTxtFiles(fileNames, drive) {
     fileNames.files.map(function (file) {
       if (file.name.includes(".txt")) {
         //do something with txt files ie exported messages without media
-        downloadFiles(file, drive).then((fileName) => {
+        downloadFiles(file, drive, false).then((fileName) => {
           try {
             if (fs.existsSync(fileName)) {
               //file exists

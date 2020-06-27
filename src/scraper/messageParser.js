@@ -84,7 +84,9 @@ async function getFiles(dir) {
   const files = await Promise.all(
     subdirs.map(async (subdir) => {
       const res = resolve(dir, subdir);
-      return (await stat(res)).isDirectory() ? getFiles(res) : res;
+      return (await stat(res)).isDirectory() && !subdir.startsWith("__")
+        ? getFiles(res)
+        : res;
     })
   );
   return files.reduce((a, f) => a.concat(f), []);

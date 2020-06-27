@@ -97,60 +97,68 @@ async function main(auth) {
     )
     .then(() => MessageParser.getFiles("./extracted"))
     .then((files) => {
-      files.forEach((file) => {
-        if (file.includes(".txt")) {
-          MessageParser.getJSON(file).then((messages) => {
-            const jsonString = JSON.stringify(messages);
+      // parse the extracted folder for txt files
+      let textFiles = files.filter((file) => file.includes(".txt"));
 
-            if (jsonString !== []) {
-              const fileName = "./JSON/" + file;
-              let f = fileName
-                .replace(fileName.substring(0, fileName.lastIndexOf("/")), "")
-                .replace("/", "");
+      textFiles.forEach((file, index) => {
+        console.log(`current: ${file}, \nnext: ${textFiles[index + 1]}\n\n`);
+        //if text file found
+        MessageParser.getJSON(file).then((messages) => {
+          // get messages from txt file
+          const jsonString = JSON.stringify(messages);
+          // make it JSON
+          if (jsonString !== []) {
+            const fileName = "./JSON/" + file;
+            let f = fileName
+              .replace(fileName.substring(0, fileName.lastIndexOf("/")), "")
+              .replace("/", "");
 
-              let jsonFileName =
-                "./JSON/" +
-                f.replace(
-                  ".txt",
-                  "-" + MessageParser.getFormattedDate() + ".json"
-                );
+            let jsonFileName =
+              "./JSON/" +
+              f.replace(
+                ".txt",
+                "-" + MessageParser.getFormattedDate() + ".json"
+              );
+            // give the JSON file a timestamp
 
-              let jsonFileNameWithoutTimeStamp = f.replace(".txt", "");
+            let jsonFileNameWithoutTimeStamp = f.replace(".txt", "");
 
-              if (
-                jsonFileName.startsWith("./JSON/._") ||
-                jsonString === [] ||
-                jsonString.length === 0
-              ) {
-                return;
-              } else {
-                MessageParser.ensureDir("./JSON/").then(() =>
-                  MessageParser.getFiles("./JSON").then((files) => {
-                    if (files.length) {
-                      files.forEach((file) => {
-                        // old files exist, delete and write new files
-                        fsx.remove(file).then(() => {
-                          MessageParser.writeToJsonFile(
-                            jsonFileName,
-                            jsonString,
-                            false
-                          );
-                        });
+            if (
+              jsonFileName.startsWith("./JSON/._") ||
+              jsonString === [] ||
+              jsonString.length === 0
+            ) {
+              return;
+            } else {
+              MessageParser.ensureDir("./JSON/").then(() =>
+                MessageParser.getFiles("./JSON").then((files) => {
+                  if (files.length) {
+                    files.forEach((file) => {
+                      // TODO : 1. get JSON from existing file, diff and store latest
+                      // TODO : 2. old files exist, delete and write new files
+
+                      fsx.remove(file).then(() => {
+                        console.log("");
+                        MessageParser.writeToJsonFile(
+                          jsonFileName,
+                          jsonString,
+                          false
+                        );
                       });
-                    } else {
-                      // no files inside JSON folder, create some
-                      MessageParser.writeToJsonFile(
-                        jsonFileName,
-                        jsonString,
-                        false
-                      );
-                    }
-                  })
-                );
-              }
+                    });
+                  } else {
+                    // no files inside JSON folder, create some
+                    MessageParser.writeToJsonFile(
+                      jsonFileName,
+                      jsonString,
+                      false
+                    );
+                  }
+                })
+              );
             }
-          });
-        }
+          }
+        });
       });
     })
 

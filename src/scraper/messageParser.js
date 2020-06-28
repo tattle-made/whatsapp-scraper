@@ -1,11 +1,12 @@
 const { promisify } = require("util");
-const { resolve } = require("path");
+const fsp = require("fs").promises;
 const fs = require("fs");
 const fsx = require("fs-extra");
 const readdir = promisify(fs.readdir);
 const stat = promisify(fs.stat);
 const jsonfile = require("jsonfile");
 const GD = require("./google-drive");
+const path = require("path");
 
 // var whatsappMessagesParser = require("./wa-parser");
 const whatsapp = require("whatsapp-chat-parser");
@@ -73,23 +74,27 @@ async function writeToJsonFile(file, data, del) {
 async function ensureDir(directory) {
   try {
     await fsx.ensureDir(directory);
-    console.log("success!");
+    console.log(`${directory} exists!`);
   } catch (err) {
     console.error(err);
   }
 }
 
-async function getFiles(dir) {
-  const subdirs = await readdir(dir);
-  const files = await Promise.all(
-    subdirs.map(async (subdir) => {
-      const res = resolve(dir, subdir);
-      return (await stat(res)).isDirectory() && !subdir.startsWith("__")
-        ? getFiles(res)
-        : res;
-    })
-  );
-  return files.reduce((a, f) => a.concat(f), []);
+async function getFiles(dir, files = []) {
+  const listing = await fsp.readdir(dir, { withFileTypes: true });
+  let dirs = [];
+  for (let f of listing) {
+    const fullName = path.join(dir, f.name);
+    if (f.isFile()) {
+      files.push(fullName);
+    } else if (f.isDirectory()) {
+      dirs.push(fullName);
+    }
+  }
+  for (let d of dirs) {
+    await getFiles(d, files);
+  }
+  return files;
 }
 
 exports.getFiles = getFiles;

@@ -5,6 +5,8 @@ const { google } = require("googleapis");
 const fsx = require("fs-extra");
 const GD = require("./google-drive");
 const MessageParser = require("./messageParser");
+var readdir = require("recursive-readdir");
+
 // If modifying these scopes, delete token.json.
 const SCOPES = ["https://www.googleapis.com/auth/drive"];
 // The file token.json stores the user's access and refresh tokens, and is
@@ -87,7 +89,6 @@ function getAccessToken(oAuth2Client, callback) {
 async function main(auth) {
   console.log("main");
   const drive = google.drive({ version: "v3", auth });
-
   GD.getFileNames(drive)
     .then((fileNames) =>
       Promise.all([
@@ -95,72 +96,73 @@ async function main(auth) {
         GD.processTxtFiles(fileNames, drive),
       ])
     )
-    .then(() => MessageParser.getFiles("./extracted"))
-    .then((files) => {
-      // parse the extracted folder for txt files
-      let textFiles = files.filter((file) => file.includes(".txt"));
+    .then((result) => {
+      console.log(result);
+      MessageParser.getFiles("./extracted").then((files) => {
+        let textFiles = files.filter(
+          (file) => file.includes(".txt") && !file.includes("/__MACOSX")
+        );
+        textFiles.forEach((file, index) => {
+          // console.log(`current: ${file}, \nnext: ${textFiles[index + 1]}\n\n`);
+          //if text file found
+          MessageParser.getJSON(file).then((messages) => {
+            // get messages from txt file
+            const jsonString = JSON.stringify(messages);
+            // make it JSON
+            if (jsonString !== []) {
+              const fileName = "./JSON/" + file;
+              let f = fileName
+                .replace(fileName.substring(0, fileName.lastIndexOf("/")), "")
+                .replace("/", "");
 
-      textFiles.forEach((file, index) => {
-        console.log(`current: ${file}, \nnext: ${textFiles[index + 1]}\n\n`);
-        //if text file found
-        MessageParser.getJSON(file).then((messages) => {
-          // get messages from txt file
-          const jsonString = JSON.stringify(messages);
-          // make it JSON
-          if (jsonString !== []) {
-            const fileName = "./JSON/" + file;
-            let f = fileName
-              .replace(fileName.substring(0, fileName.lastIndexOf("/")), "")
-              .replace("/", "");
+              let jsonFileName =
+                "./JSON/" +
+                f.replace(
+                  ".txt",
+                  "-" + MessageParser.getFormattedDate() + ".json"
+                );
+              // give the JSON file a timestamp
 
-            let jsonFileName =
-              "./JSON/" +
-              f.replace(
-                ".txt",
-                "-" + MessageParser.getFormattedDate() + ".json"
-              );
-            // give the JSON file a timestamp
+              let jsonFileNameWithoutTimeStamp = f.replace(".txt", "");
 
-            let jsonFileNameWithoutTimeStamp = f.replace(".txt", "");
+              if (
+                jsonFileName.startsWith("./JSON/._") ||
+                jsonString === [] ||
+                jsonString.length === 0
+              ) {
+                return;
+              } else {
+                MessageParser.ensureDir("./JSON/").then(() =>
+                  MessageParser.getFiles("./JSON").then((files) => {
+                    if (files.length) {
+                      files.forEach((file) => {
+                        // TODO : 1. get JSON from existing file, diff and store latest
+                        // TODO : 2. old files exist, delete and write new files
 
-            if (
-              jsonFileName.startsWith("./JSON/._") ||
-              jsonString === [] ||
-              jsonString.length === 0
-            ) {
-              return;
-            } else {
-              MessageParser.ensureDir("./JSON/").then(() =>
-                MessageParser.getFiles("./JSON").then((files) => {
-                  if (files.length) {
-                    files.forEach((file) => {
-                      // TODO : 1. get JSON from existing file, diff and store latest
-                      // TODO : 2. old files exist, delete and write new files
-
-                      fsx.remove(file).then(() => {
-                        console.log("");
-                        MessageParser.writeToJsonFile(
-                          jsonFileName,
-                          jsonString,
-                          false
-                        );
+                        fsx.remove(file).then(() => {
+                          console.log(`Writing JSON to ${file}`);
+                          MessageParser.writeToJsonFile(
+                            jsonFileName,
+                            jsonString,
+                            false
+                          );
+                        });
                       });
-                    });
-                  } else {
-                    // no files inside JSON folder, create some
-                    MessageParser.writeToJsonFile(
-                      jsonFileName,
-                      jsonString,
-                      false
-                    );
-                  }
-                })
-              );
+                    } else {
+                      // no files inside JSON folder, create some
+                      console.log(`Writing JSON to ${jsonFileName}`);
+                      MessageParser.writeToJsonFile(
+                        jsonFileName,
+                        jsonString,
+                        false
+                      );
+                    }
+                  })
+                );
+              }
             }
-          }
+          });
         });
       });
-    })
-
-    .catch((err) => console.error("error in main", err));
+    });
 }

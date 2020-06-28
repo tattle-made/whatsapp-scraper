@@ -1,11 +1,6 @@
-const { promisify } = require("util");
 const fsp = require("fs").promises;
 const fs = require("fs");
 const fsx = require("fs-extra");
-const readdir = promisify(fs.readdir);
-const stat = promisify(fs.stat);
-const jsonfile = require("jsonfile");
-const GD = require("./google-drive");
 const path = require("path");
 
 // var whatsappMessagesParser = require("./wa-parser");
@@ -74,7 +69,6 @@ async function writeToJsonFile(file, data, del) {
 async function ensureDir(directory) {
   try {
     await fsx.ensureDir(directory);
-    console.log(`${directory} exists!`);
   } catch (err) {
     console.error(err);
   }

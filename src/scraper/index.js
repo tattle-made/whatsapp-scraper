@@ -1,11 +1,9 @@
 const fs = require("fs");
-const path = require("path");
 const readline = require("readline");
 const { google } = require("googleapis");
 const fsx = require("fs-extra");
 const GD = require("./google-drive");
 const MessageParser = require("./messageParser");
-var readdir = require("recursive-readdir");
 
 // If modifying these scopes, delete token.json.
 const SCOPES = ["https://www.googleapis.com/auth/drive"];
@@ -89,15 +87,11 @@ function getAccessToken(oAuth2Client, callback) {
 async function main(auth) {
   console.log("main");
   const drive = google.drive({ version: "v3", auth });
-  GD.getFileNames(drive)
-    .then((fileNames) =>
-      Promise.all([
-        GD.processZipFiles(fileNames, drive),
-        GD.processTxtFiles(fileNames, drive),
-      ])
-    )
-    .then((result) => {
-      console.log(result);
+  GD.getFileNames(drive).then((fileNames) => {
+    Promise.all([
+      GD.processZipFiles(fileNames, drive),
+      GD.processTxtFiles(fileNames, drive),
+    ]).then((result) => {
       MessageParser.getFiles("./extracted").then((files) => {
         let textFiles = files.filter(
           (file) => file.includes(".txt") && !file.includes("/__MACOSX")
@@ -165,4 +159,5 @@ async function main(auth) {
         });
       });
     });
+  });
 }

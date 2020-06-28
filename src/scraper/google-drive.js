@@ -103,23 +103,26 @@ async function processTxtFiles(fileNames, drive) {
     fileNames.files.map(function (file) {
       if (file.name.includes(".txt")) {
         //do something with txt files ie exported messages without media
-        downloadFiles(file, drive, false).then((fileName) => {
-          try {
-            if (fs.existsSync(fileName)) {
-              //file exists
-              let src = fileName;
-              let folder = `${src.replace("./downloaded/", "")}`;
-              folder = folder.replace(".txt", "");
+        return new Promise((resolve, reject) => {
+          downloadFiles(file, drive, false).then((fileName) => {
+            try {
+              if (fs.existsSync(fileName)) {
+                //file exists
+                let src = fileName;
+                let folder = `${src.replace("./downloaded/", "")}`;
+                folder = folder.replace(".txt", "");
 
-              let dest = `./extracted/${folder}/${src.replace(
-                "./downloaded/",
-                ""
-              )}`;
-              moveTxtFilesToFolder(src, dest);
+                let dest = `./extracted/${folder}/${src.replace(
+                  "./downloaded/",
+                  ""
+                )}`;
+                moveTxtFilesToFolder(src, dest);
+              }
+            } catch (err) {
+              console.error(err);
             }
-          } catch (err) {
-            console.error(err);
-          }
+            resolve("ok");
+          });
         });
       }
     })

@@ -15,6 +15,7 @@
     "googleapis": "^39.2.0",
     "jsonfile": "^6.0.1",
     "md5-file": "^5.0.0",
+    "recursive-readdir": "^2.2.2",
     "whatsapp-chat-parser": "^2.0.8"
   }
 }

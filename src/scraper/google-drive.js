@@ -67,20 +67,23 @@ async function processZipFiles(fileNames, drive) {
   return Promise.all(
     fileNames.files.map(function (file) {
       if (file.name.includes(".zip")) {
-        return downloadFiles(file, drive, false).then((r) => {
-          md5File(r)
-            .then((hash) => {
-              return { fileName: r, hash: hash };
-              // getting the checksum here, for version control
-            })
-            .then((res) => {
-              const zip = new AdmZip(res.fileName);
-              const unzipDirPath = `./extracted/${file.name}`;
-              ensureDirectoryExistence(unzipDirPath);
-              zip.extractAllTo(unzipDirPath, /*overwrite*/ true);
-            })
-            .then(() => resolve())
-            .catch((err) => console.error(err));
+        return new Promise((resolve, reject) => {
+          downloadFiles(file, drive, false).then((r) => {
+            md5File(r)
+              .then((hash) => {
+                return { fileName: r, hash: hash };
+                // getting the checksum here, for version control
+              })
+              .then((res) => {
+                const zip = new AdmZip(res.fileName);
+                const unzipDirPath = `./extracted/${file.name}`;
+                ensureDirectoryExistence(unzipDirPath);
+                zip.extractAllTo(unzipDirPath, /*overwrite*/ true);
+                console.log(`extracted ${unzipDirPath}`);
+                resolve(unzipDirPath);
+              })
+              .catch((err) => console.error(err));
+          });
         });
       }
     })
@@ -88,7 +91,7 @@ async function processZipFiles(fileNames, drive) {
 }
 
 async function moveTxtFilesToFolder(src, dest) {
-  console.log("mtf", src, dest);
+  // console.log("mtf", src, dest);
   fsx
     .move(src, dest, { overwrite: true })
     .then(() => console.log("moved .txt file to its own folder"))

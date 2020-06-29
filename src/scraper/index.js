@@ -97,7 +97,6 @@ async function main(auth) {
           (file) => file.includes(".txt") && !file.includes("/__MACOSX")
         );
 
-        console.log(textFiles);
         textFiles.forEach((file, index) => {
           // console.log(`current: ${file}, \nnext: ${textFiles[index + 1]}\n\n`);
           //if text file found

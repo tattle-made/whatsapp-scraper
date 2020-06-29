@@ -96,6 +96,8 @@ async function main(auth) {
         let textFiles = files.filter(
           (file) => file.includes(".txt") && !file.includes("/__MACOSX")
         );
+
+        console.log(textFiles);
         textFiles.forEach((file, index) => {
           // console.log(`current: ${file}, \nnext: ${textFiles[index + 1]}\n\n`);
           //if text file found
@@ -115,10 +117,9 @@ async function main(auth) {
                   ".txt",
                   "-" + MessageParser.getFormattedDate() + ".json"
                 );
+
               // give the JSON file a timestamp
-
-              let jsonFileNameWithoutTimeStamp = f.replace(".txt", "");
-
+              // let jsonFileNameWithoutTimeStamp = f.replace(".txt", "");
               if (
                 jsonFileName.startsWith("./JSON/._") ||
                 jsonString === [] ||
@@ -130,9 +131,6 @@ async function main(auth) {
                   MessageParser.getFiles("./JSON").then((files) => {
                     if (files.length) {
                       files.forEach((file) => {
-                        // TODO : 1. get JSON from existing file, diff and store latest
-                        // TODO : 2. old files exist, delete and write new files
-
                         fsx.remove(file).then(() => {
                           console.log(`Writing JSON to ${file}`);
                           MessageParser.writeToJsonFile(

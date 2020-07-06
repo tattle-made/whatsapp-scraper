@@ -1,0 +1,52 @@
+{
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/whatsapp-groups",
+      "handler": "whatsapp-group.find",
+      "config": {
+        "policies": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/whatsapp-groups/count",
+      "handler": "whatsapp-group.count",
+      "config": {
+        "policies": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/whatsapp-groups/:id",
+      "handler": "whatsapp-group.findOne",
+      "config": {
+        "policies": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/whatsapp-groups",
+      "handler": "whatsapp-group.create",
+      "config": {
+        "policies": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/whatsapp-groups/:id",
+      "handler": "whatsapp-group.update",
+      "config": {
+        "policies": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/whatsapp-groups/:id",
+      "handler": "whatsapp-group.delete",
+      "config": {
+        "policies": []
+      }
+    }
+  ]
+}

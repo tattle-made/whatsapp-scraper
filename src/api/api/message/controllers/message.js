@@ -6,7 +6,6 @@
  */
 
 module.exports = {
-  // GET /message/:groupid
   findbygroupid: async (ctx) => {
     ctx.send("Hello World!");
   },

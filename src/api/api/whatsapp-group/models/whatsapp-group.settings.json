@@ -1,0 +1,19 @@
+{
+  "kind": "collectionType",
+  "collectionName": "whatsapp_groups",
+  "info": {
+    "name": "whatsapp-group"
+  },
+  "options": {
+    "increments": true,
+    "timestamps": true
+  },
+  "attributes": {
+    "name": {
+      "type": "string"
+    },
+    "messages": {
+      "collection": "message"
+    }
+  }
+}

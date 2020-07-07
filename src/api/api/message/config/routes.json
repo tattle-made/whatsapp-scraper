@@ -7,7 +7,7 @@
     },
     {
       "method": "GET",
-      "path": "/messages/:groupid",
+      "path": "/messages/bygroupid/:groupid",
       "handler": "message.findbygroupid",
       "config": {
         "policies": []

@@ -7,10 +7,23 @@
 
 module.exports = {
   findbygroupid: async (ctx) => {
-    ctx.send("Hello World!");
+    console.log(ctx.params.groupid);
+
+    const result = await strapi
+      .query("message")
+      .model.query((qb) => {
+        qb.where("id", ctx.params.groupid);
+      })
+      .fetch();
+
+    const fields = result.toJSON();
+    // get groupid from request
+    console.log(fields);
+    ctx.send(fields);
   },
 
   index: async (ctx) => {
-    ctx.send("Hello World!");
+    console.log(ctx);
+    ctx.send(ctx.url);
   },
 };

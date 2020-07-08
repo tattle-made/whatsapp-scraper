@@ -2,13 +2,16 @@
   "routes": [
     {
       "method": "GET",
-      "path": "/messages/hello",
-      "handler": "message.index"
+      "path": "/messages/bygroupid/:groupid",
+      "handler": "message.bygrpid",
+      "config": {
+        "policies": []
+      }
     },
     {
       "method": "GET",
-      "path": "/messages/bygroupid/:groupid",
-      "handler": "message.findbygroupid",
+      "path": "/messages/byid/:msgid",
+      "handler": "message.bymsgid",
       "config": {
         "policies": []
       }

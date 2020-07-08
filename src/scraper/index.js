@@ -96,6 +96,7 @@ async function main(auth) {
         let textFiles = files.filter(
           (file) => file.includes(".txt") && !file.includes("/__MACOSX")
         );
+
         textFiles.forEach((file, index) => {
           // console.log(`current: ${file}, \nnext: ${textFiles[index + 1]}\n\n`);
           //if text file found
@@ -115,6 +116,10 @@ async function main(auth) {
                   ".txt",
                   "-" + MessageParser.getFormattedDate() + ".json"
                 );
+
+              // give the JSON file a timestamp
+              // let jsonFileNameWithoutTimeStamp = f.replace(".txt", "");
+
               // give the JSON file a timestamp
 
               let jsonFileNameWithoutTimeStamp = f.replace(".txt", "");

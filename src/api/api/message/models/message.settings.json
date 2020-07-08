@@ -1,0 +1,24 @@
+{
+  "kind": "collectionType",
+  "collectionName": "messages",
+  "info": {
+    "name": "message"
+  },
+  "options": {
+    "increments": true,
+    "timestamps": true
+  },
+  "attributes": {
+    "content": {
+      "type": "text",
+      "required": true
+    },
+    "whatsapp_group": {
+      "model": "whatsapp-group"
+    },
+    "tags": {
+      "collection": "tag",
+      "via": "messages"
+    }
+  }
+}

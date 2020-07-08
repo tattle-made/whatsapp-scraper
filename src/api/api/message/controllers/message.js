@@ -6,24 +6,26 @@
  */
 
 module.exports = {
-  findbygroupid: async (ctx) => {
-    console.log(ctx.params.groupid);
-
+  bymsgid: async (ctx) => {
     const result = await strapi
       .query("message")
       .model.query((qb) => {
-        qb.where("id", ctx.params.groupid);
+        qb.where("id", ctx.params.msgid);
       })
       .fetch();
-
     const fields = result.toJSON();
-    // get groupid from request
-    console.log(fields);
     ctx.send(fields);
   },
 
-  index: async (ctx) => {
-    console.log(ctx);
-    ctx.send(ctx.url);
+  bygrpid: async (ctx) => {
+    console.log(ctx.query);
+    const result = await strapi
+      .query("message")
+      .model.query((qb) => {
+        qb.where("whatsapp_group", ctx.params.groupid);
+      })
+      .fetch();
+    console.log(ctx.params.groupid);
+    ctx.send("by group id");
   },
 };

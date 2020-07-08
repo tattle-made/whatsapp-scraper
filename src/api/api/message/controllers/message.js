@@ -18,14 +18,12 @@ module.exports = {
   },
 
   bygrpid: async (ctx) => {
-    console.log(ctx.query);
     const result = await strapi
       .query("message")
       .model.query((qb) => {
         qb.where("whatsapp_group", ctx.params.groupid);
       })
       .fetch();
-    console.log(ctx.params.groupid);
-    ctx.send("by group id");
+    ctx.send(result);
   },
 };

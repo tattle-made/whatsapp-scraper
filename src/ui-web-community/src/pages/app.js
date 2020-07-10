@@ -10,8 +10,11 @@ import useAuth from "../components/hooks/useAuth"
 const App = ({ location }) => {
   const { state, isAuthenticated } = useAuth()
   const redirect = location.pathname.split("/").pop()
+  //is everything after the last / in URL
+
   useEffect(() => {
     if (!isAuthenticated) {
+      // redirect to login if not logged in
       navigate("/login", { state: { redirect } })
     }
   }, [isAuthenticated, redirect])

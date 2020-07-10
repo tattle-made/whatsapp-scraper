@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useReducer } from "react"
 import axios from "axios"
+
 const apiURL = process.env.GATSBY_API_URL
 
 const DEFAULT_STATE = {
@@ -50,6 +51,7 @@ const useAuth = () => {
         reject(e)
       }
     })
+
   const logout = () => {
     dispatcher({ type: "LOGOUT" })
   }

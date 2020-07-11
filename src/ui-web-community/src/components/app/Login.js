@@ -1,3 +1,5 @@
+//TODO: Make Responsive
+
 import React, { useState } from "react"
 import { navigate } from "gatsby"
 import useAuth from "../hooks/useAuth"
@@ -58,15 +60,15 @@ const Login = ({ redirect }) => {
           onSubmit={handleSubmit}
           className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4"
         >
-          <div>
+          <Box pad="small">
             <label htmlFor="username">Username</label>
             <TextInput
               placeholder="type here"
               value={identifier}
               onChange={event => setIdentifier(event.target.value)}
             />
-          </div>
-          <div>
+          </Box>
+          <Box pad="small">
             <label htmlFor="password">Password</label>
             <TextInput
               type="password"
@@ -74,7 +76,7 @@ const Login = ({ redirect }) => {
               value={password}
               onChange={event => setPassword(event.target.value)}
             />
-          </div>
+          </Box>
           <Box pad="medium">
             <Button primary type="submit" label="Sign-In" />
           </Box>

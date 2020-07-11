@@ -12,7 +12,7 @@ const Login = ({ redirect }) => {
     event.preventDefault()
     try {
       await login({ identifier, password })
-      navigate(redirect)
+      navigate("/app/dashboard")
     } catch (e) {
       console.log("Error occurred during authentication")
       const {

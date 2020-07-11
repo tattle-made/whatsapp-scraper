@@ -5,7 +5,6 @@ const Logout = ({ redirect }) => {
   const { state, logout } = useAuth()
 
   if (state.jwt) {
-    console.log(state)
     logout()
   }
 

@@ -6,7 +6,7 @@ import Navigation from "../components/app/Navigation"
 import Dashboard from "../components/app/Dashboard"
 import Account from "../components/app/Account"
 import useAuth from "../components/hooks/useAuth"
-
+import Logout from "../components/app/Logout"
 const App = ({ location }) => {
   const { state, isAuthenticated } = useAuth()
   const redirect = location.pathname.split("/").pop()
@@ -14,6 +14,7 @@ const App = ({ location }) => {
 
   useEffect(() => {
     if (!isAuthenticated) {
+      console.log(state)
       // redirect to login if not logged in
       navigate("/login", { state: { redirect } })
     }
@@ -21,11 +22,11 @@ const App = ({ location }) => {
 
   return (
     <Layout>
-      <pre>{JSON.stringify(state, null, 2)}</pre>
       <Navigation />
       <Router basepath="/app">
-        <Account path="/account" />
         <Dashboard default />
+        <Account path="/account" />
+        <Logout path="/logout" />
       </Router>
     </Layout>
   )

@@ -1,12 +1,13 @@
-import React from "react"
+import React, { useEffect } from "react"
 import useAuth from "../hooks/useAuth"
-import { navigate } from "gatsby"
 
 const Logout = ({ redirect }) => {
-  const { state, logout } = useAuth()
-  if (state.jwt) {
+  const { logout } = useAuth()
+  useEffect(() => {
+    console.log("Logging out...")
     logout()
-  }
+  })
+
   return <p>Logged out</p>
 }
 export default Logout

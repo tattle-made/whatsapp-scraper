@@ -3,7 +3,7 @@ import { navigate } from "gatsby"
 import useAuth from "../hooks/useAuth"
 
 const Login = ({ redirect }) => {
-  const { state, login } = useAuth()
+  const { login } = useAuth()
   const [identifier, setIdentifier] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
@@ -11,7 +11,8 @@ const Login = ({ redirect }) => {
   const handleSubmit = async event => {
     event.preventDefault()
     try {
-      await login({ identifier, password })
+      const r = await login({ identifier, password })
+      sessionStorage.setItem("jwt", r.jwt)
       navigate("/app/dashboard")
     } catch (e) {
       console.log("Error occurred during authentication")

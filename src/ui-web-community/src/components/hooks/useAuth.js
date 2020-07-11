@@ -1,5 +1,8 @@
+// eslint-disable-next-line no-debugger
+
 import React, { createContext, useContext, useReducer } from "react"
 import axios from "axios"
+import { navigate } from "gatsby"
 
 const apiURL = process.env.GATSBY_API_URL
 
@@ -13,8 +16,6 @@ const reducer = (state, action) => {
   switch (action.type) {
     case "LOGIN":
       const { jwt = null, user = {} } = action.payload
-      localStorage.setItem("jwtToken", action.payload.jwt)
-
       return { ...state, jwt, user, loggedIn: true }
     case "LOGOUT":
       return { ...state, jwt: null, user: {}, loggedIn: false }
@@ -56,6 +57,8 @@ const useAuth = () => {
 
   const logout = () => {
     dispatcher({ type: "LOGOUT" })
+    sessionStorage.removeItem("jwt")
+    navigate("/app")
   }
 
   return { state, isAuthenticated, login, logout }

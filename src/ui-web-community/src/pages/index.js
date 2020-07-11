@@ -1,7 +1,7 @@
 import React, { useEffect } from "react"
 import { navigate } from "gatsby"
 import useAuth from "../components/hooks/useAuth"
-import Layout from "../components/layout"
+import DefaultLayout from "../components/default-layout"
 
 const IndexPage = ({ location }) => {
   const { state, isAuthenticated } = useAuth()
@@ -15,7 +15,7 @@ const IndexPage = ({ location }) => {
     }
   }, [isAuthenticated, redirect, state])
 
-  return <Layout></Layout>
+  return <DefaultLayout></DefaultLayout>
 }
 
 export default IndexPage

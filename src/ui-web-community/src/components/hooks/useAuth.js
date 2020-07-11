@@ -13,6 +13,8 @@ const reducer = (state, action) => {
   switch (action.type) {
     case "LOGIN":
       const { jwt = null, user = {} } = action.payload
+      localStorage.setItem("jwtToken", action.payload.jwt)
+
       return { ...state, jwt, user, loggedIn: true }
     case "LOGOUT":
       return { ...state, jwt: null, user: {}, loggedIn: false }

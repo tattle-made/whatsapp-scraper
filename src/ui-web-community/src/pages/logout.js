@@ -1,5 +1,5 @@
 import React from "react"
-import Login from "../components/app/Login"
+import Logout from "../components/app/Logout"
 import Layout from "../components/layout"
 
 const LoginPage = ({ location }) => {
@@ -12,10 +12,9 @@ const LoginPage = ({ location }) => {
 
   return (
     <Layout>
-      <h1>Login</h1>
-      <p>Please use your credentials to login</p>
+      <h1>Logging out</h1>
       <div>
-        <Login redirect={redirect} />
+        <Logout redirect={redirect} />
       </div>
     </Layout>
   )

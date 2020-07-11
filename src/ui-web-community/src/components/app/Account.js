@@ -1,10 +1,10 @@
 import React from "react"
+import { Box } from "grommet"
 
 const Account = () => (
-  <>
-    <h1>Account Page</h1>
-    <p>This is another protected Account page</p>
-  </>
+  <Box pad="medium">
+    <h4>Run Scraper to get latest data</h4>
+  </Box>
 )
 
 export default Account

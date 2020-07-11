@@ -1,11 +1,11 @@
 import React from "react"
-
+import { Box } from "grommet"
 const Dashboard = () => {
   return (
-    <>
-      <h1>Dashboard</h1>
+    <Box pad="medium">
+      <h4>WhatsApp Scraper Dashboard</h4>
       <p>This is a protected Dashboard</p>
-    </>
+    </Box>
   )
 }
 

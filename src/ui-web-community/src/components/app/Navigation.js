@@ -1,16 +1,18 @@
 import React from "react"
 import { Link } from "gatsby"
+import { Nav } from "grommet"
+import { Home, Services, Logout } from "grommet-icons"
 
 export default () => (
-  <ul className="flex">
-    <li className="mx-2 px-2">
-      <Link to="/app">Dashboard</Link>
-    </li>
-    <li className="mx-2 px-2">
-      <Link to="/app/account">Account</Link>
-    </li>
-    <li>
-      <Link to="/app/logout">Logout</Link>
-    </li>
-  </ul>
+  <Nav direction="row" pad="medium">
+    <Link to="/app">
+      <Home color="brand" />
+    </Link>
+    <Link to="/app/account">
+      <Services color="brand" />
+    </Link>
+    <Link to="/app/logout">
+      <Logout color="brand" />
+    </Link>
+  </Nav>
 )

@@ -1,6 +1,6 @@
 import React, { useState } from "react"
 import { navigate } from "gatsby"
-import useAuth from "./hooks/useAuth"
+import useAuth from "../hooks/useAuth"
 
 const Login = ({ redirect }) => {
   const { state, login } = useAuth()
@@ -33,7 +33,6 @@ const Login = ({ redirect }) => {
 
   return (
     <div className="w-full max-w-xs">
-      <pre>{JSON.stringify({ state }, null, 2)}</pre>
       <form
         onSubmit={handleSubmit}
         className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4"
@@ -88,9 +87,6 @@ const Login = ({ redirect }) => {
           {error}
         </p>
       )}
-      <p className="text-center text-gray-500 text-xs">
-        &copy;2020 Acme Corp. All rights reserved.
-      </p>
     </div>
   )
 }

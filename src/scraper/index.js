@@ -117,7 +117,6 @@ async function main(auth) {
                   "-" + MessageParser.getFormattedDate() + ".json"
                 );
 
-
               // give the JSON file a timestamp
               // let jsonFileNameWithoutTimeStamp = f.replace(".txt", "");
 
@@ -136,7 +135,6 @@ async function main(auth) {
                   MessageParser.getFiles("./JSON").then((files) => {
                     if (files.length) {
                       files.forEach((file) => {
-
                         // TODO : 1. get JSON from existing file, diff and store latest
                         // TODO : 2. old files exist, delete and write new files
 

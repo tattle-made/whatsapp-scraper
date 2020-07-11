@@ -13,12 +13,15 @@ const App = ({ location }) => {
   //is everything after the last / in URL
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      console.log(state)
-      // redirect to login if not logged in
-      navigate("/login", { state: { redirect } })
+    const token = sessionStorage.getItem("jwt")
+    console.log(token, isAuthenticated, "app.js")
+    if (!token) {
+      if (!isAuthenticated) {
+        // redirect to login if not logged in
+        navigate("/login", { state: { redirect } })
+      }
     }
-  }, [isAuthenticated, redirect])
+  }, [isAuthenticated, redirect, state])
 
   return (
     <Layout>

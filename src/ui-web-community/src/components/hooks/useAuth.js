@@ -18,6 +18,7 @@ const reducer = (state, action) => {
       const { jwt = null, user = {} } = action.payload
       return { ...state, jwt, user, loggedIn: true }
     case "LOGOUT":
+      sessionStorage.removeItem("jwt")
       return { ...state, jwt: null, user: {}, loggedIn: false }
     default:
       return DEFAULT_STATE
@@ -57,7 +58,6 @@ const useAuth = () => {
 
   const logout = () => {
     dispatcher({ type: "LOGOUT" })
-    sessionStorage.removeItem("jwt")
     navigate("/app")
   }
 

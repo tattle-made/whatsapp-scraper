@@ -8,13 +8,13 @@ import Account from "../components/app/Account"
 import useAuth from "../components/hooks/useAuth"
 import Logout from "../components/app/Logout"
 const App = ({ location }) => {
-  const { state, isAuthenticated } = useAuth()
+  const { state, isAuthenticated, logout } = useAuth()
   const redirect = location.pathname.split("/").pop()
   //is everything after the last / in URL
 
   useEffect(() => {
     const token = sessionStorage.getItem("jwt")
-    console.log(token, isAuthenticated, "app.js")
+
     if (!token) {
       if (!isAuthenticated) {
         // redirect to login if not logged in

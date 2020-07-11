@@ -12,11 +12,7 @@ const LoginPage = ({ location }) => {
 
   return (
     <DefaultLayout>
-      <h1>Login</h1>
-      <p>Please use your credentials to login</p>
-      <div>
-        <Login redirect={redirect} />
-      </div>
+      <Login redirect={redirect} />
     </DefaultLayout>
   )
 }

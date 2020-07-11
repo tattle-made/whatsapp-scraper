@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react"
+import React, { useState, useRef } from "react"
 import { Box, Drop, Button, Heading, Text } from "grommet"
 import { ChevronDown } from "react-feather"
 import { PlainLink as Link } from "../components/atomic/TattleLinks"
@@ -8,14 +8,14 @@ import { PlainLink as Link } from "../components/atomic/TattleLinks"
  **/
 
 const DropDownMenu = ({ options }) => {
-  const [fetching, setFetching] = useState(false)
+  // const [fetching, setFetching] = useState(false)
   const [showToolTip, setShowToolTip] = useState(false)
 
   const iconRef = useRef()
 
-  useEffect(() => {
-    setFetching(true)
-  })
+  // useEffect(() => {
+  //   setFetching(true)
+  // })
 
   const onShowToolTip = () => {
     setShowToolTip(true)

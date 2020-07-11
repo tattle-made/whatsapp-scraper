@@ -10,7 +10,7 @@ import Logout from "../components/app/Logout"
 import DefaultLayout from "../components/default-layout"
 
 const App = ({ location }) => {
-  const { state, isAuthenticated, logout } = useAuth()
+  const { state, isAuthenticated } = useAuth()
   const redirect = location.pathname.split("/").pop()
   //is everything after the last / in URL
 

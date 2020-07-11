@@ -1,12 +1,14 @@
 import React, { useEffect } from "react"
 import { navigate } from "gatsby"
 import { Router } from "@reach/router"
-import Layout from "../components/layout"
+
 import Navigation from "../components/app/Navigation"
 import Dashboard from "../components/app/Dashboard"
 import Account from "../components/app/Account"
 import useAuth from "../components/hooks/useAuth"
 import Logout from "../components/app/Logout"
+import DefaultLayout from "../components/default-layout"
+
 const App = ({ location }) => {
   const { state, isAuthenticated, logout } = useAuth()
   const redirect = location.pathname.split("/").pop()
@@ -24,14 +26,14 @@ const App = ({ location }) => {
   }, [isAuthenticated, redirect, state])
 
   return (
-    <Layout>
+    <DefaultLayout>
       <Navigation />
       <Router basepath="/app">
         <Dashboard default />
         <Account path="/account" />
         <Logout path="/logout" />
       </Router>
-    </Layout>
+    </DefaultLayout>
   )
 }
 export default App

@@ -1,6 +1,5 @@
 import React from "react"
 import Login from "../components/app/Login"
-import Layout from "../components/layout"
 import DefaultLayout from "../components/default-layout"
 
 const LoginPage = ({ location }) => {

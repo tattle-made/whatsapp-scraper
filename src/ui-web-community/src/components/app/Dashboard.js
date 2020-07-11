@@ -1,15 +1,11 @@
 import React from "react"
-import { navigate } from "gatsby"
-import useAuth from "../hooks/useAuth"
+import DefaultLayout from "../default-layout"
 const Dashboard = () => {
-  const { state, logout } = useAuth()
-
-  console.log(state.jwt)
   return (
-    <>
+    <DefaultLayout>
       <h1>Dashboard</h1>
       <p>This is a protected Dashboard</p>
-    </>
+    </DefaultLayout>
   )
 }
 

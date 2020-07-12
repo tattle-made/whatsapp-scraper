@@ -3,7 +3,15 @@
 import React, { useState } from "react"
 import { navigate } from "gatsby"
 import useAuth from "../hooks/useAuth"
-import { TextInput, Box, Image, Button } from "grommet"
+import {
+  Heading,
+  Paragraph,
+  Text,
+  TextInput,
+  Box,
+  Image,
+  Button,
+} from "grommet"
 import { useStaticQuery, graphql } from "gatsby"
 
 const Login = ({ redirect }) => {
@@ -53,32 +61,43 @@ const Login = ({ redirect }) => {
 
   return (
     <Box direction="row" pad="medium">
-      <Box pad="medium">
-        <h1>Login</h1>
-        <p>Please use your credentials to login</p>
+      <Box width="medium">
+        <Image fit="cover" src={logoURL} />
+      </Box>
+
+      <Box width={"medium"} pad="medium" gap={"small"}>
+        <Heading level={2} margin={"none"}>
+          Login
+        </Heading>
         <form
           onSubmit={handleSubmit}
           className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4"
         >
-          <Box pad="small">
-            <label htmlFor="username">Username</label>
-            <TextInput
-              placeholder="type here"
-              value={identifier}
-              onChange={event => setIdentifier(event.target.value)}
+          <Box gap={"small"}>
+            <Box>
+              <label htmlFor="username">Username</label>
+              <TextInput
+                placeholder="type here"
+                value={identifier}
+                onChange={event => setIdentifier(event.target.value)}
+              />
+            </Box>
+            <Box>
+              <label htmlFor="password">Password</label>
+              <TextInput
+                type="password"
+                placeholder="type here"
+                value={password}
+                onChange={event => setPassword(event.target.value)}
+              />
+            </Box>
+
+            <Button
+              primary
+              type="submit"
+              label="Sign-In"
+              margin={{ top: "medium" }}
             />
-          </Box>
-          <Box pad="small">
-            <label htmlFor="password">Password</label>
-            <TextInput
-              type="password"
-              placeholder="type here"
-              value={password}
-              onChange={event => setPassword(event.target.value)}
-            />
-          </Box>
-          <Box pad="medium">
-            <Button primary type="submit" label="Sign-In" />
           </Box>
         </form>
         {error.length > 1 && (
@@ -86,9 +105,6 @@ const Login = ({ redirect }) => {
             {error}
           </p>
         )}
-      </Box>
-      <Box width="medium">
-        <Image fit="cover" src={logoURL} />
       </Box>
     </Box>
   )

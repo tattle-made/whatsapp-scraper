@@ -1,12 +1,15 @@
 import React from "react"
 import { Link } from "gatsby"
 import { Nav } from "grommet"
-import { Home, Services, Logout } from "grommet-icons"
+import { Home, Services, Logout, ChatOption } from "grommet-icons"
 
 export default () => (
   <Nav direction="row" pad="medium">
     <Link to="/app">
       <Home color="brand" />
+    </Link>
+    <Link to="/app/messages">
+      <ChatOption color="brand" />
     </Link>
     <Link to="/app/account">
       <Services color="brand" />

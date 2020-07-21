@@ -1,11 +1,11 @@
-import styled, { css } from 'styled-components';
+import styled, { css } from "styled-components"
 
-import { overflowBreakWord, messageBaseStyle } from '../../utils/styles';
+import { overflowBreakWord, messageBaseStyle } from "../../utils/styles"
 import {
   systemBackgroundColor,
   activeUserBackgroundColor,
   whatsappGreenDarkColor,
-} from '../../utils/colors';
+} from "../../utils/colors"
 
 const Item = styled.li`
   margin-top: 1rem;
@@ -26,12 +26,12 @@ const Item = styled.li`
     css`
       margin-top: 0.25rem;
     `}
-`;
+`
 
 const Bubble = styled.div`
   ${messageBaseStyle}
   flex-direction: column;
-  background-color: white;
+  background-color: #f5f5f5;
   ${props =>
     props.isSystem &&
     css`
@@ -51,23 +51,23 @@ const Bubble = styled.div`
   @media (min-width: 700px) {
     max-width: 65%;
   }
-`;
+`
 
 const Wrapper = styled.div`
   flex: 1 1 auto;
-`;
+`
 
 const Author = styled.div`
   margin-bottom: 0.25rem;
   font-weight: bold;
   font-size: 75%;
   color: ${props => props.color};
-`;
+`
 
 const Message = styled.div`
   ${overflowBreakWord}
   white-space: pre-wrap;
-`;
+`
 
 const Date = styled.time`
   flex: 0 0 auto;
@@ -81,7 +81,7 @@ const Date = styled.time`
   @media (max-width: 699px) {
     margin-top: 0.25rem;
   }
-`;
+`
 
 const Tagger = styled.div`
   display: flex;
@@ -89,7 +89,7 @@ const Tagger = styled.div`
   margin-top: 10px;
   font-size: 0.75em;
   align-items: baseline;
-`;
+`
 
 const Tag = styled.div`
   margin-left: 5px;
@@ -97,7 +97,7 @@ const Tag = styled.div`
   font-color: ${whatsappGreenDarkColor};
   background-color: #cde79c;
   border-radius: 5px;
-`;
+`
 const MessageTop = styled.div`
   display: flex;
   justify-content: space-between;
@@ -105,15 +105,5 @@ const MessageTop = styled.div`
   padding: 5px 0 5px 0;
   margin-bottom: 10px;
   border-bottom: 1px dotted ${whatsappGreenDarkColor};
-`;
-export {
-  Item,
-  Bubble,
-  Wrapper,
-  Author,
-  Message,
-  Date,
-  MessageTop,
-  Tag,
-  Tagger,
-};
+`
+export { Item, Bubble, Wrapper, Author, Message, Date, MessageTop, Tag, Tagger }

@@ -48,7 +48,7 @@ const MessageViewer = ({ media, messages, limit, deleteMessages }) => {
   }
 
   useEffect(() => {
-    console.log("ue", messages.length)
+    console.log("ue", messages.length, colorMap)
     if (messages.length && !setDisplayedMessagesFlag) {
       console.log("here")
       setDisplayedMessagesFlag = true

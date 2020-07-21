@@ -134,7 +134,7 @@ async function getAuthToken() {
 
 async function deleteAllMessages(token) {
   axios
-    .get(process.env.STRAPI_URL + "/messages/", {
+    .get(process.env.STRAPI_URL + "/messages/?_start=0&_limit=-1", {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -170,27 +170,67 @@ async function main() {
     console.log("JSON folder exists");
     token = await getAuthToken();
 
-    MessageParser.getFiles("./JSON").then((files) => {
+    MessageParser.getFiles("./JSON").then(async (files) => {
       if (files.length && token) {
         // ADD GROUPS
+
+        // const groups = await getGroups(token);
         files.forEach(async (file) => {
           const messages = fsx.readJsonSync(file);
 
+          //Check if group exists already
+
+          // if (groups) {
+          //   groups.forEach((group) => console.log(group.name));
+          // }
+          // [
+          //   {
+          //     "id": 17,
+          //     "name": "Against NRC CAA NPR",
+          //     "created_at": "2020-07-20T11:28:50.918Z",
+          //     "updated_at": "2020-07-20T11:28:50.918Z",
+          //     "messages": []
+          //   },
+          //   {
+          //     "id": 18,
+          //     "name": "AutoProctor UI",
+          //     "created_at": "2020-07-20T11:28:51.056Z",
+          //     "updated_at": "2020-07-20T11:28:51.056Z",
+          //     "messages": []
+          //   },
+          //   {
+          //     "id": 19,
+          //     "name": "Covid Updates",
+          //     "created_at": "2020-07-20T11:28:51.097Z",
+          //     "updated_at": "2020-07-20T11:28:51.097Z",
+          //     "messages": []
+          //   },
+          //   {
+          //     "id": 20,
+          //     "name": "Srisindia Live AsandraBBK",
+          //     "created_at": "2020-07-20T11:28:51.127Z",
+          //     "updated_at": "2020-07-20T11:28:51.127Z",
+          //     "messages": []
+          //   }
+          // ]
+
           // CREATE NEW GROUP
+
           let front = "json/whatsapp chat with ".length;
+
           let group = {
             name: file.substring(front, file.length - 25),
           };
 
           const newGroup = await createGroup(token, group);
           console.log(newGroup);
-          3;
 
-          // CREATE MESSAGES
+          // // CREATE MESSAGES
           if (newGroup.id !== null) {
             messages.forEach(async (message) => {
               const payloadMessage = {
                 content: message.message,
+                date: message.date,
                 author: message.author,
                 whatsapp_group: newGroup.id,
                 tags: [],

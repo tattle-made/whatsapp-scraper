@@ -1,15 +1,15 @@
-import React from 'react';
-import PropTypes from 'prop-types';
-import Checkbox from '../CheckBox/CheckBox';
-import * as S from './style';
+import React from "react"
+import PropTypes from "prop-types"
+import Checkbox from "../CheckBox/CheckBox"
+import * as S from "./style"
 
 const intlOptions = {
-  year: 'numeric',
-  month: 'short',
-  day: 'numeric',
-  hour: 'numeric',
-  minute: 'numeric',
-};
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "numeric",
+}
 
 const Message = ({
   media,
@@ -21,16 +21,16 @@ const Message = ({
   selected,
   tags,
 }) => {
-  const isSystem = message.author === 'System';
+  const isSystem = message.author === "System"
 
-  const dateTime = message.date
-    .toISOString()
-    .slice(0, 19)
-    .replace('T', ' ');
+  const msgdate = new Date(message.date)
+
+  const dateTime = msgdate.toISOString().slice(0, 19).replace("T", " ")
+  // const dateTime = ""
 
   const handleCheck = event => {
-    onselect(message.id, event.currentTarget.checked);
-  };
+    onselect(message.id, event.currentTarget.checked)
+  }
 
   return (
     <S.Item
@@ -51,12 +51,12 @@ const Message = ({
             )}
           </S.MessageTop>
           {media ? <img src={media.src} alt="img" width="200px" /> : null}
-          <S.Message>{message.message}</S.Message>
+          <S.Message>{message.content}</S.Message>
         </S.Wrapper>
         {!isSystem && (
           <S.Date dateTime={dateTime}>
-            {new Intl.DateTimeFormat('default', intlOptions).format(
-              message.date,
+            {new Intl.DateTimeFormat("default", intlOptions).format(
+              new Date(message.date)
             )}
           </S.Date>
         )}
@@ -70,8 +70,8 @@ const Message = ({
         )}
       </S.Bubble>
     </S.Item>
-  );
-};
+  )
+}
 
 Message.propTypes = {
   message: PropTypes.shape({
@@ -84,14 +84,14 @@ Message.propTypes = {
   isActiveUser: PropTypes.bool,
   tags: PropTypes.arrayOf(PropTypes.string),
   sameAuthorAsPrevious: PropTypes.bool,
-};
+}
 
 Message.defaultProps = {
-  color: 'black',
+  color: "black",
   isActiveUser: false,
   sameAuthorAsPrevious: false,
   media: null,
   tags: null,
-};
+}
 
-export default Message;
+export default Message

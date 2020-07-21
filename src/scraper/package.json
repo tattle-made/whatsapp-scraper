@@ -11,6 +11,8 @@
   "license": "ISC",
   "dependencies": {
     "adm-zip": "^0.4.14",
+    "axios": "^0.19.2",
+    "dotenv": "^8.2.0",
     "fs-extra": "^9.0.1",
     "googleapis": "^39.2.0",
     "json-dedupe": "^0.2.1",

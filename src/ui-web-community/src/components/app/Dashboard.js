@@ -14,7 +14,6 @@ async function getGroups(token) {
     .then(response => {
       // Handle success.
       // console.log("Data: ", response.data)
-      console.log(response.data)
       return response.data
     })
     .catch(error => {
@@ -54,7 +53,7 @@ const Dashboard = () => {
         <GroupContainer>
           {Object.keys(groups).map(group => (
             <Box pad="small" key={groups[group].id}>
-              <Link to="/app/messages">
+              <Link to={`/app/messages/?gid=${groups[group].id}`}>
                 <Group>
                   <>{groups[group].name}</>
                   <br />

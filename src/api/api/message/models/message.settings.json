@@ -14,11 +14,20 @@
       "required": true
     },
     "whatsapp_group": {
-      "model": "whatsapp-group"
+      "model": "whatsapp-group",
+      "via": "messages"
     },
     "tags": {
       "collection": "tag",
       "via": "messages"
+    },
+    "author": {
+      "type": "string",
+      "required": true
+    },
+    "date": {
+      "type": "string",
+      "required": true
     }
   }
 }

@@ -46,9 +46,6 @@ const Message = ({
               defaultChecked={false}
               onChange={handleCheck}
             />
-            {!isSystem && !sameAuthorAsPrevious && (
-              <S.Author color={color}>{message.author}</S.Author>
-            )}
           </S.MessageTop>
           {media ? <img src={media.src} alt="img" width="200px" /> : null}
           <S.Message>{message.content}</S.Message>

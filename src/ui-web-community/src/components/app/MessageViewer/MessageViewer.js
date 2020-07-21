@@ -8,9 +8,8 @@ import * as S from "./style"
 import { authorColors } from "../../utils/colors"
 import ContextActionBar from "../ContextActionsBar/ContextActionBar"
 
-let setDisplayedMessagesFlag = false
-
 const MessageViewer = ({ media, messages, limit, deleteMessages }) => {
+  let setDisplayedMessagesFlag = false
   const [selectedMessages, setSelectedMessages] = useState([])
   const [showTaggingWindow, setShowTaggingWindow] = useState(false)
   const [allCurrentTags, setCurrentTags] = useState([])

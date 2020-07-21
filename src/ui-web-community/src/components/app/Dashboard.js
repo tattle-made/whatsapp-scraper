@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react"
 import { Link } from "gatsby"
-import { Box, Grommet, Button } from "grommet"
+import { Box, Grommet } from "grommet"
 import axios from "axios"
 import styled from "styled-components"
 import TattleTheme from "../atomic/theme"
@@ -31,7 +31,7 @@ const Dashboard = () => {
       setGroups(groups)
     }
     getWAGroups()
-  }, [])
+  }, [token])
 
   const Group = styled.div`
     border: 2px solid;
@@ -55,9 +55,10 @@ const Dashboard = () => {
             <Box pad="small" key={groups[group].id}>
               <Link to={`/app/messages/?gid=${groups[group].id}`}>
                 <Group>
-                  <>{groups[group].name}</>
-                  <br />
-                  <>ID: {groups[group].id}</>
+                  <b>
+                    <i>ID: {groups[group].id}</i>&nbsp;&nbsp;
+                    {groups[group].name}
+                  </b>
                   <br />
                   <>Created: {groups[group].created_at}</>
                   <br />

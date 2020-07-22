@@ -8,7 +8,10 @@ import Account from "../components/app/Account"
 import useAuth from "../components/hooks/useAuth"
 import Logout from "../components/app/Logout"
 import DefaultLayout from "../components/default-layout"
+<<<<<<< HEAD
 import Messages from "../components/app/Messages"
+=======
+>>>>>>> upstream/master
 
 const App = ({ location }) => {
   const { state, isAuthenticated } = useAuth()
@@ -33,7 +36,10 @@ const App = ({ location }) => {
         <Dashboard default />
         <Account path="/account" />
         <Logout path="/logout" />
+<<<<<<< HEAD
         <Messages path="/messages" />
+=======
+>>>>>>> upstream/master
       </Router>
     </DefaultLayout>
   )

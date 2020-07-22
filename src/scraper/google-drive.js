@@ -19,7 +19,13 @@ function ensureDirectoryExistence(filePath) {
 
 function getFileNames(drive) {
   return drive.files
-    .list({ pageSize: 10, fields: "nextPageToken, files(id, name)" })
+    .list({
+      pageSize: 1000,
+      fields: "nextPageToken, files(id, name, trashed, explicitlyTrashed)",
+      spaces: "drive",
+      q: "name contains 'Whatsapp'",
+    })
+
     .then((files) => files.data)
     .catch((err) => console.log("error : ", err));
 }
@@ -68,7 +74,7 @@ async function processZipFiles(fileNames, drive) {
     fileNames.files.map(function (file) {
       if (file.name.includes(".zip")) {
         return new Promise((resolve, reject) => {
-          downloadFiles(file, drive, false).then((r) => {
+          downloadFiles(file, drive, true).then((r) => {
             md5File(r)
               .then((hash) => {
                 return { fileName: r, hash: hash };
@@ -104,7 +110,7 @@ async function processTxtFiles(fileNames, drive) {
       if (file.name.includes(".txt")) {
         //do something with txt files ie exported messages without media
         return new Promise((resolve, reject) => {
-          downloadFiles(file, drive, false).then((fileName) => {
+          downloadFiles(file, drive, true).then((fileName) => {
             try {
               if (fs.existsSync(fileName)) {
                 //file exists

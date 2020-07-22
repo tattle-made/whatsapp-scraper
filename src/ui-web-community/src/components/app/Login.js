@@ -3,6 +3,9 @@
 import React, { useState } from "react"
 import { navigate } from "gatsby"
 import useAuth from "../hooks/useAuth"
+<<<<<<< HEAD
+import { TextInput, Box, Image, Button } from "grommet"
+=======
 import {
   Heading,
   Paragraph,
@@ -12,6 +15,7 @@ import {
   Image,
   Button,
 } from "grommet"
+>>>>>>> upstream/master
 import { useStaticQuery, graphql } from "gatsby"
 
 const Login = ({ redirect }) => {
@@ -61,6 +65,11 @@ const Login = ({ redirect }) => {
 
   return (
     <Box direction="row" pad="medium">
+<<<<<<< HEAD
+      <Box pad="medium">
+        <h1>Login</h1>
+        <p>Please use your credentials to login</p>
+=======
       <Box width="medium">
         <Image fit="cover" src={logoURL} />
       </Box>
@@ -69,10 +78,33 @@ const Login = ({ redirect }) => {
         <Heading level={2} margin={"none"}>
           Login
         </Heading>
+>>>>>>> upstream/master
         <form
           onSubmit={handleSubmit}
           className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4"
         >
+<<<<<<< HEAD
+          <Box pad="small">
+            <label htmlFor="username">Username</label>
+            <TextInput
+              placeholder="type here"
+              value={identifier}
+              onChange={event => setIdentifier(event.target.value)}
+            />
+          </Box>
+          <Box pad="small">
+            <label htmlFor="password">Password</label>
+            <TextInput
+              type="password"
+              placeholder="type here"
+              value={password}
+              onChange={event => setPassword(event.target.value)}
+            />
+          </Box>
+          <Box pad="medium">
+            <Button primary type="submit" label="Sign-In" />
+          </Box>
+=======
           <Box gap={"small"}>
             <Box>
               <label htmlFor="username">Username</label>
@@ -99,6 +131,7 @@ const Login = ({ redirect }) => {
               margin={{ top: "medium" }}
             />
           </Box>
+>>>>>>> upstream/master
         </form>
         {error.length > 1 && (
           <p className="text-center text-red-500 bg-red-200 border p-2">
@@ -106,6 +139,12 @@ const Login = ({ redirect }) => {
           </p>
         )}
       </Box>
+<<<<<<< HEAD
+      <Box width="medium">
+        <Image fit="cover" src={logoURL} />
+      </Box>
+=======
+>>>>>>> upstream/master
     </Box>
   )
 }

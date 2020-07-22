@@ -58,7 +58,11 @@ const useAuth = () => {
 
   const logout = () => {
     dispatcher({ type: "LOGOUT" })
+<<<<<<< HEAD
     // navigate("/app")
+=======
+    navigate("/app")
+>>>>>>> upstream/master
   }
 
   return { state, isAuthenticated, login, logout }

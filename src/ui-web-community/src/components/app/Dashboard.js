@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react"
-import { Link } from "gatsby"
-import { Box, Grommet } from "grommet"
+import { Box, Grommet, Button } from "grommet"
 import axios from "axios"
 import styled from "styled-components"
 import TattleTheme from "../atomic/theme"
+import { Link } from "gatsby"
+
 async function getGroups(token) {
   return axios
     .get("http://localhost:1337/whatsapp-groups/", {
@@ -53,20 +54,23 @@ const Dashboard = () => {
         <GroupContainer>
           {Object.keys(groups).map(group => (
             <Box pad="small" key={groups[group].id}>
-              <Link to={`/app/messages/?gid=${groups[group].id}`}>
-                <Group>
-                  <b>
-                    <i>ID: {groups[group].id}</i>&nbsp;&nbsp;
-                    {groups[group].name}
-                  </b>
-                  <br />
-                  <>Created: {groups[group].created_at}</>
-                  <br />
-                  <>Updated: {groups[group].updated_at}</>
-                  <br />
-                  <>Messages: {groups[group].messages.length}</>
-                </Group>
-              </Link>
+              <Group>
+                <>{groups[group].name}</>
+                <br />
+                <>ID: {groups[group].id}</>
+                <br />
+                <>Created: {groups[group].created_at}</>
+                <br />
+                <>Updated: {groups[group].updated_at}</>
+                <br />
+                <>Messages: {groups[group].messages.length}</>
+                <br />
+                <Button>
+                  <Link to={`/app/messages/?gid=${groups[group].id}`}>
+                    Edit Messages
+                  </Link>
+                </Button>
+              </Group>
             </Box>
           ))}
         </GroupContainer>

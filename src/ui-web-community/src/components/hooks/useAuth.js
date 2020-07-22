@@ -58,7 +58,6 @@ const useAuth = () => {
 
   const logout = () => {
     dispatcher({ type: "LOGOUT" })
-    navigate("/app")
   }
 
   return { state, isAuthenticated, login, logout }

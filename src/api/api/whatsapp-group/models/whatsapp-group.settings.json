@@ -13,6 +13,7 @@
       "type": "string"
     },
     "messages": {
+      "via": "whatsapp_group",
       "collection": "message"
     }
   }

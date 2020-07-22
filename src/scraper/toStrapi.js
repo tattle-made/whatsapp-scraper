@@ -134,7 +134,7 @@ async function getAuthToken() {
 
 async function deleteAllMessages(token) {
   axios
-    .get(process.env.STRAPI_URL + "/messages/?_start=0&_limit=-1", {
+    .get(process.env.STRAPI_URL + "/messages/?_start=0&_limit=500", {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -251,4 +251,4 @@ async function main() {
 }
 
 main();
-// del();
+//  del();

@@ -28,23 +28,23 @@ const MessageViewer = ({ media, messages, limit, deleteMessages }) => {
   const renderedMessages = displayedMessages.slice(0, limit)
   const isLimited = renderedMessages.length !== displayedMessages.length
 
-  const getAllSelectedTags = selectedMessages => {
-    let allTags = []
-    selectedMessages.forEach(msg => {
-      displayedMessages.forEach(m => {
-        if (m.id === msg) {
-          if (m.tags.length) {
-            m.tags.forEach(tag => {
-              if (!allTags.includes(tag)) {
-                allTags.push(tag)
-              }
-            })
-          }
-        }
-      })
-    })
-    return allTags
-  }
+  // const getAllSelectedTags = selectedMessages => {
+  //   let allTags = []
+  //   selectedMessages.forEach(msg => {
+  //     displayedMessages.forEach(m => {
+  //       if (m.id === msg) {
+  //         if (m.tags.length) {
+  //           m.tags.forEach(tag => {
+  //             if (!allTags.includes(tag)) {
+  //               allTags.push(tag)
+  //             }
+  //           })
+  //         }
+  //       }
+  //     })
+  //   })
+  //   return allTags
+  // }
 
   useEffect(() => {
     console.log("ue", messages.length, colorMap)
@@ -184,7 +184,7 @@ const MessageViewer = ({ media, messages, limit, deleteMessages }) => {
       <S.List>
         {renderedMessages.map((message, i, arr) => {
           const prevMessage = arr[i - 1]
-          let attachedMedia = null
+          // let attachedMedia = null
 
           // if (media.length) {
           //   media.forEach(jpeg => {

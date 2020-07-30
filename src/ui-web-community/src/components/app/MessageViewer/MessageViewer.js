@@ -266,6 +266,30 @@ const MessageViewer = ({ media, messages, limit, deleteMessages, update }) => {
     // console.log(updatedMsg)
   }
 
+  const createTagFromName = async tagName => {
+    let URL = `${apiURL}/tags/`
+    return axios
+      .post(
+        URL,
+        { name: tagName },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      )
+      .then(response => {
+        return response.data
+      })
+      .catch(error => {
+        // Handle error.
+        console.log(
+          "An error occurred while deleting a message:",
+          error.response
+        )
+      })
+  }
+
   const changeTags = async tags => {
     // important to remember that the incoming arg "tags" is an array
     // of "resulting" tag names after the add/del operation
@@ -289,8 +313,11 @@ const MessageViewer = ({ media, messages, limit, deleteMessages, update }) => {
     } else {
       // console.log(`Added A Tag`, tags, allCurrentTags)
       const addedTagName = tags.filter(x => !allCurrentTags.includes(x))[0]
-
+      if (!addedTagName) {
+        return
+      }
       const tagExists = await getTagFromName(addedTagName)
+
       if (tagExists.length) {
         // console.log("Tag Exists")
         selectedMessages.forEach(selectedMsg => {
@@ -305,7 +332,19 @@ const MessageViewer = ({ media, messages, limit, deleteMessages, update }) => {
         })
         Swal.fire(`Tag added: ${addedTagName}`)
       } else {
-        console.log("Tag does not exist")
+        // console.log("Tag does not exist")
+        await createTagFromName(addedTagName)
+        selectedMessages.forEach(selectedMsg => {
+          displayedMessages.forEach(async displayedMsg => {
+            if (displayedMsg.id === selectedMsg) {
+              // console.log("add tag", displayedMsg)
+              let message = await getMessageFromID(selectedMsg)
+              await applyTagToMessage(message[0], addedTagName)
+              update()
+            }
+          })
+        })
+        Swal.fire(`Tag added: ${addedTagName}`)
       }
     }
     // update tags in the tagging window

@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react"
-// import PropTypes from "prop-types"
 import Swal from "sweetalert2"
 import axios from "axios"
 
@@ -189,7 +188,7 @@ const MessageViewer = ({ media, messages, limit, deleteMessages, update }) => {
   }
 
   const getTagFromName = tagName => {
-    let URL = `http://localhost:1337/tags?name=${tagName}&`
+    let URL = apiURL + `/tags?name=${tagName}&`
     return axios
       .get(URL, {
         headers: {
@@ -229,6 +228,7 @@ const MessageViewer = ({ media, messages, limit, deleteMessages, update }) => {
   }
 
   const updateMessage = (id, message) => {
+    console.log("updating", id)
     let URL = `${apiURL}/messages/${id}`
     return axios
       .put(URL, message, {
@@ -248,7 +248,7 @@ const MessageViewer = ({ media, messages, limit, deleteMessages, update }) => {
       })
   }
 
-  const deleteMessageFromTag = async (message, tag) => {
+  const deleteTagFromMessage = async (message, tag) => {
     const tagToDelete = await getTagFromName(tag)
     const newTags = message.tags
       .map(t => t.id)
@@ -256,12 +256,20 @@ const MessageViewer = ({ media, messages, limit, deleteMessages, update }) => {
 
     message.tags = newTags
     const updatedMsg = await updateMessage(message.id, message)
-    console.log(updatedMsg)
+    // console.log(updatedMsg)
+  }
+
+  const applyTagToMessage = async (message, tag) => {
+    const tagToAdd = await getTagFromName(tag)
+    message.tags = [tagToAdd[0].id, ...message.tags]
+    const updatedMsg = await updateMessage(message.id, message)
+    // console.log(updatedMsg)
   }
 
   const changeTags = async tags => {
     // important to remember that the incoming arg "tags" is an array
     // of "resulting" tag names after the add/del operation
+
     if (tags.length < allCurrentTags.length) {
       const deletedTagName = allCurrentTags.filter(x => !tags.includes(x))[0]
       selectedMessages.forEach(selectedMsg => {
@@ -269,16 +277,36 @@ const MessageViewer = ({ media, messages, limit, deleteMessages, update }) => {
           if (displayedMsg.id === selectedMsg) {
             const dmTagNames = displayedMsg.tags.map(tag => tag.name)
             if (dmTagNames.includes(deletedTagName)) {
-              console.log(`Deleting ${deletedTagName} from ${selectedMsg}`)
+              // console.log(`Deleting ${deletedTagName} from ${selectedMsg}`)
               let message = await getMessageFromID(selectedMsg)
-              await deleteMessageFromTag(message[0], deletedTagName)
+              await deleteTagFromMessage(message[0], deletedTagName)
               update()
+              Swal.fire(`Tag deleted: ${deletedTagName}`)
             }
           }
         })
       })
     } else {
-      console.log(`Added A Tag`)
+      // console.log(`Added A Tag`, tags, allCurrentTags)
+      const addedTagName = tags.filter(x => !allCurrentTags.includes(x))[0]
+
+      const tagExists = await getTagFromName(addedTagName)
+      if (tagExists.length) {
+        // console.log("Tag Exists")
+        selectedMessages.forEach(selectedMsg => {
+          displayedMessages.forEach(async displayedMsg => {
+            if (displayedMsg.id === selectedMsg) {
+              // console.log("add tag", displayedMsg)
+              let message = await getMessageFromID(selectedMsg)
+              await applyTagToMessage(message[0], addedTagName)
+              update()
+            }
+          })
+        })
+        Swal.fire(`Tag added: ${addedTagName}`)
+      } else {
+        console.log("Tag does not exist")
+      }
     }
     // update tags in the tagging window
     setCurrentTags(tags)
@@ -342,22 +370,4 @@ const MessageViewer = ({ media, messages, limit, deleteMessages, update }) => {
     </S.Container>
   )
 }
-
-// MessageViewer.propTypes = {
-//   messages: PropTypes.arrayOf(
-//     PropTypes.shape({
-//       date: PropTypes.instanceOf(Date),
-//       author: PropTypes.string,
-//       message: PropTypes.string,
-//     })
-//   ).isRequired,
-//   media: PropTypes.arrayOf(PropTypes.object),
-//   limit: PropTypes.number,
-// }
-
-// MessageViewer.defaultProps = {
-//   limit: Infinity,
-//   media: null,
-// }
-
 export default React.memo(MessageViewer)

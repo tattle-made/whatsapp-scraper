@@ -1,5 +1,5 @@
 import React from "react"
-import PropTypes from "prop-types"
+// import PropTypes from "prop-types"
 import Checkbox from "../CheckBox/CheckBox"
 import * as S from "./style"
 
@@ -70,25 +70,25 @@ const Message = ({
   )
 }
 
-Message.propTypes = {
-  message: PropTypes.shape({
-    date: PropTypes.instanceOf(Date),
-    author: PropTypes.string,
-    message: PropTypes.string,
-  }).isRequired,
-  media: PropTypes.objectOf(PropTypes.object),
-  color: PropTypes.string,
-  isActiveUser: PropTypes.bool,
-  tags: PropTypes.arrayOf(PropTypes.string),
-  sameAuthorAsPrevious: PropTypes.bool,
-}
+// Message.propTypes = {
+//   message: PropTypes.shape({
+//     date: PropTypes.instanceOf(Date),
+//     author: PropTypes.string,
+//     message: PropTypes.string,
+//   }).isRequired,
+//   media: PropTypes.objectOf(PropTypes.object),
+//   color: PropTypes.string,
+//   isActiveUser: PropTypes.bool,
+//   tags: PropTypes.arrayOf(PropTypes.string),
+//   sameAuthorAsPrevious: PropTypes.bool,
+// }
 
-Message.defaultProps = {
-  color: "black",
-  isActiveUser: false,
-  sameAuthorAsPrevious: false,
-  media: null,
-  tags: null,
-}
+// Message.defaultProps = {
+//   color: "black",
+//   isActiveUser: false,
+//   sameAuthorAsPrevious: false,
+//   media: null,
+//   tags: null,
+// }
 
 export default Message

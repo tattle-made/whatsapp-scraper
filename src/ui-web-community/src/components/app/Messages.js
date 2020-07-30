@@ -25,12 +25,12 @@ const Account = () => {
       })
       .then(response => {
         // Handle success.
-        console.log("Data: ", response.data)
-        let search = window.location.search
-        let params = new URLSearchParams(search)
-        let foo = params.get("gid")
-        let url = `http://localhost:1337/messages/?whatsapp_group.id=${foo}&_limit=100`
-        const token = sessionStorage.getItem("jwt")
+        // console.log("Data: ", response.data)
+        // let search = window.location.search
+        // let params = new URLSearchParams(search)
+        // let foo = params.get("gid")
+        // let url = `http://localhost:1337/messages/?whatsapp_group.id=${foo}&_limit=100`
+        // const token = sessionStorage.getItem("jwt")
         setMessages(response.data)
       })
       .catch(error => {

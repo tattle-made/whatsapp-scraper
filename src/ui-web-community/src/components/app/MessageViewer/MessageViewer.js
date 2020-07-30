@@ -9,7 +9,7 @@ import Message from "../Message/Message"
 import * as S from "./style"
 import { authorColors } from "../../utils/colors"
 
-const MessageViewer = ({ media, messages, limit, deleteMessages }) => {
+const MessageViewer = ({ media, messages, limit, deleteMessages, update }) => {
   // is tagging window visible? (or, are any messages selected?)
   const [showTaggingWindow, setShowTaggingWindow] = useState(false)
 
@@ -188,33 +188,8 @@ const MessageViewer = ({ media, messages, limit, deleteMessages }) => {
     }
   }
 
-  // const getTagFromName = tagName => {
-  //   let URL = `http://localhost:1337/tags?name=${tagName}&`
-  //   return axios
-  //     .get(URL, {
-  //       headers: {
-  //         Authorization: `Bearer ${token}`,
-  //       },
-  //     })
-  //     .then(response => {
-  //       return response.data
-  //     })
-  //     .catch(error => {
-  //       // Handle error.
-  //       console.log(
-  //         "An error occurred while deleting a message:",
-  //         error.response
-  //       )
-  //     })
-  // }
-
-  const getTagsFromIds = tags => {
-    let URL = "http://localhost:1337/tags?"
-
-    tags.forEach(tagID => {
-      URL = URL + `id=${tagID}&`
-    })
-
+  const getTagFromName = tagName => {
+    let URL = `http://localhost:1337/tags?name=${tagName}&`
     return axios
       .get(URL, {
         headers: {
@@ -233,60 +208,16 @@ const MessageViewer = ({ media, messages, limit, deleteMessages }) => {
       })
   }
 
-  const changeTags = async tags => {
-    // important to remember that the incoming arg "tags" is an array
-    // of "resulting" tag names after the add/del operation
-
-    if (tags.length < allCurrentTags.length) {
-      const deletedTagName = allCurrentTags.filter(x => !tags.includes(x))[0]
-
-      selectedMessages.forEach(selectedMsg => {
-        displayedMessages.forEach(displayedMsg => {
-          if (displayedMsg.id === selectedMsg) {
-            const dmTagNames = displayedMsg.tags.map(tag => tag.name)
-            if (dmTagNames.includes(deletedTagName)) {
-              console.log(`I will delete ${deletedTagName} from ${selectedMsg}`)
-            }
-          }
-        })
-      })
-    } else {
-      console.log(`Added A Tag`)
-    }
-
-    let newTags = allCurrentTags
-    // let allTagIds = []
-    let currentTagIds = []
-    let currentTagNames = []
-    axios
-      .get(apiURL + "/tags/", {
+  const getMessageFromID = id => {
+    let URL = `${apiURL}/messages/?id=${id}`
+    return axios
+      .get(URL, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       })
       .then(response => {
-        // allTagIds = response.data.map(tag => tag.id)
-        // console.log("ALL TAGS IN DB", allTagIds)
-        allCurrentTags.forEach(currentTag => {
-          response.data.forEach(tagInDb => {
-            if (tagInDb.name === currentTag) {
-              currentTagIds.push(tagInDb.id)
-              currentTagNames.push(tagInDb.name)
-            }
-          })
-        })
-        // console.log("CURENT TAG IDS", currentTagIds)
-        // console.log("CURENT TAG NAMES", currentTagNames)
-      })
-      .then(async undef => {
-        const currentTags = await getTagsFromIds(currentTagIds)
-        selectedMessages.forEach(selectedMsg => {
-          displayedMessages.forEach(displayedMsg => {
-            if (displayedMsg.id === selectedMsg) {
-              console.log(currentTags)
-            }
-          })
-        })
+        return response.data
       })
       .catch(error => {
         // Handle error.
@@ -295,9 +226,62 @@ const MessageViewer = ({ media, messages, limit, deleteMessages }) => {
           error.response
         )
       })
+  }
 
+  const updateMessage = (id, message) => {
+    let URL = `${apiURL}/messages/${id}`
+    return axios
+      .put(URL, message, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+      .then(response => {
+        return response.data
+      })
+      .catch(error => {
+        // Handle error.
+        console.log(
+          "An error occurred while deleting a message:",
+          error.response
+        )
+      })
+  }
+
+  const deleteMessageFromTag = async (message, tag) => {
+    const tagToDelete = await getTagFromName(tag)
+    const newTags = message.tags
+      .map(t => t.id)
+      .filter(x => x !== tagToDelete[0].id)
+
+    message.tags = newTags
+    const updatedMsg = await updateMessage(message.id, message)
+    console.log(updatedMsg)
+  }
+
+  const changeTags = async tags => {
+    // important to remember that the incoming arg "tags" is an array
+    // of "resulting" tag names after the add/del operation
+    if (tags.length < allCurrentTags.length) {
+      const deletedTagName = allCurrentTags.filter(x => !tags.includes(x))[0]
+      selectedMessages.forEach(selectedMsg => {
+        displayedMessages.forEach(async displayedMsg => {
+          if (displayedMsg.id === selectedMsg) {
+            const dmTagNames = displayedMsg.tags.map(tag => tag.name)
+            if (dmTagNames.includes(deletedTagName)) {
+              console.log(`Deleting ${deletedTagName} from ${selectedMsg}`)
+              let message = await getMessageFromID(selectedMsg)
+              await deleteMessageFromTag(message[0], deletedTagName)
+              update()
+            }
+          }
+        })
+      })
+    } else {
+      console.log(`Added A Tag`)
+    }
     // update tags in the tagging window
-    setCurrentTags(allCurrentTags => [...newTags])
+    setCurrentTags(tags)
   }
 
   return (

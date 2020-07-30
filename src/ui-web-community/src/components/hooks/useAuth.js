@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useReducer } from "react"
 import axios from "axios"
-o
+
 const apiURL = process.env.GATSBY_API_URL
 
 const DEFAULT_STATE = {

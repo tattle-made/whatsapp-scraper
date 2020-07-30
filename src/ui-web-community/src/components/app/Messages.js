@@ -6,15 +6,19 @@ import axios from "axios"
 //media, messages, limit, deleteMessages
 const Account = () => {
   const [messages, setMessages] = useState([])
+  let search = window.location.search
+  let params = new URLSearchParams(search)
+  let foo = params.get("gid")
+  let url = `http://localhost:1337/messages/?whatsapp_group.id=${foo}&_limit=100`
+  const token = sessionStorage.getItem("jwt")
 
   useEffect(() => {
-    let search = window.location.search
-    let params = new URLSearchParams(search)
-    let foo = params.get("gid")
-    let url = `http://localhost:1337/messages/?whatsapp_group.id=${foo}&_limit=100`
-    const token = sessionStorage.getItem("jwt")
     setMessages(getMessagesFromGroup(url, token))
   }, [setMessages])
+
+  // useEffect(() => {
+  //   console.log(messages)
+  // }, [messages])
 
   const getMessagesFromGroup = (url, token) => {
     return axios
@@ -38,12 +42,18 @@ const Account = () => {
         console.log("An error occurred:", error.response)
       })
   }
+
+  const update = () => {
+    console.log("update")
+    setMessages(getMessagesFromGroup(url, token))
+  }
+
   return (
     <Box pad="medium">
       <h4>Messages</h4>
 
       {messages ? (
-        <MessageViewer messages={messages} />
+        <MessageViewer messages={messages} update={update} />
       ) : (
         <p>Loading Messages...</p>
       )}

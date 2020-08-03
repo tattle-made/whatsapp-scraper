@@ -141,12 +141,15 @@ const MessageViewer = ({ media, messages, limit, deleteMessages, update }) => {
     if (newMessages.length <= 1) {
       Swal.fire("Please select more than one messages to link")
     } else {
-      newDisplayedMessages.forEach(sm => {
+      newMessages.forEach(sm => {
         let linkedMessages = []
-        newDisplayedMessages.forEach(sm2 => {
+
+        newMessages.forEach(sm2 => {
           linkedMessages.push(sm2.id)
         })
-        sm.linksTo = linkedMessages
+        sm.links = { links: linkedMessages }
+        updateMessage(sm.id, sm)
+        // update()
       })
       setDisplayedMessages(newDisplayedMessages)
       Swal.fire("Messages Linked")

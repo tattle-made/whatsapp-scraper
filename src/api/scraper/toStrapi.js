@@ -142,16 +142,18 @@ async function deleteAllMessages(token) {
     .then((response) => {
       // Handle success.
       //   console.log("Data: ", response.data);
-      response.data.forEach((r) => {
-        axios({
-          method: "DELETE",
-          url: process.env.STRAPI_URL + `/messages/${r.id}`,
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+      response.data.reduce((accumulatorPromise, r) => {
+        console.log(`Deleted message ${r.id}`);
+        return accumulatorPromise.then(() => {
+          axios({
+            method: "DELETE",
+            url: process.env.STRAPI_URL + `/messages/${r.id}`,
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
         });
-        console.log(`Deleted message ${response.id}`);
-      });
+      }, Promise.resolve());
     })
     .catch((error) => {
       // Handle error.
@@ -173,47 +175,10 @@ async function main() {
     MessageParser.getFiles("./JSON").then(async (files) => {
       if (files.length && token) {
         // ADD GROUPS
-
         // const groups = await getGroups(token);
         files.forEach(async (file) => {
           const messages = fsx.readJsonSync(file);
-
-          //Check if group exists already
-
-          // if (groups) {
-          //   groups.forEach((group) => console.log(group.name));
-          // }
-          // [
-          //   {
-          //     "id": 17,
-          //     "name": "Against NRC CAA NPR",
-          //     "created_at": "2020-07-20T11:28:50.918Z",
-          //     "updated_at": "2020-07-20T11:28:50.918Z",
-          //     "messages": []
-          //   },
-          //   {
-          //     "id": 18,
-          //     "name": "AutoProctor UI",
-          //     "created_at": "2020-07-20T11:28:51.056Z",
-          //     "updated_at": "2020-07-20T11:28:51.056Z",
-          //     "messages": []
-          //   },
-          //   {
-          //     "id": 19,
-          //     "name": "Covid Updates",
-          //     "created_at": "2020-07-20T11:28:51.097Z",
-          //     "updated_at": "2020-07-20T11:28:51.097Z",
-          //     "messages": []
-          //   },
-          //   {
-          //     "id": 20,
-          //     "name": "Srisindia Live AsandraBBK",
-          //     "created_at": "2020-07-20T11:28:51.127Z",
-          //     "updated_at": "2020-07-20T11:28:51.127Z",
-          //     "messages": []
-          //   }
-          // ]
-
+          // Check if group exists already
           // CREATE NEW GROUP
 
           let front = "json/whatsapp chat with ".length;
@@ -225,20 +190,24 @@ async function main() {
           const newGroup = await createGroup(token, group);
           console.log(newGroup);
 
-          // // CREATE MESSAGES
           if (newGroup.id !== null) {
-            messages.forEach(async (message) => {
+            messages.reduce((accumulatorPromise, message) => {
+              console.log(message);
               const payloadMessage = {
                 content: message.message,
                 date: message.date,
                 author: message.author,
                 whatsapp_group: newGroup.id,
                 tags: [],
+                links: { links: [] },
+                hasLinks: false,
+                media: null,
               };
 
-              const newMessage = await createMessage(token, payloadMessage);
-              console.log(newMessage);
-            });
+              return accumulatorPromise.then(() => {
+                return createMessage(token, payloadMessage);
+              });
+            }, Promise.resolve());
           }
         });
       }
@@ -251,4 +220,4 @@ async function main() {
 }
 
 main();
-//  del();
+// del();

@@ -51,29 +51,31 @@ const Dashboard = () => {
     <Grommet theme={TattleTheme}>
       <Box pad="medium">
         <h4>WhatsApp Scraper Dashboard</h4>
-        <GroupContainer>
-          {Object.keys(groups).map(group => (
-            <Box pad="small" key={groups[group].id}>
-              <Group>
-                <>{groups[group].name}</>
-                <br />
-                <>ID: {groups[group].id}</>
-                <br />
-                <>Created: {groups[group].created_at}</>
-                <br />
-                <>Updated: {groups[group].updated_at}</>
-                <br />
-                <>Messages: {groups[group].messages.length}</>
-                <br />
-                <Button>
-                  <Link to={`/app/messages/?gid=${groups[group].id}`}>
-                    Edit Messages
-                  </Link>
-                </Button>
-              </Group>
-            </Box>
-          ))}
-        </GroupContainer>
+        {groups ? (
+          <GroupContainer>
+            {Object.keys(groups).map(group => (
+              <Box pad="small" key={groups[group].id}>
+                <Group>
+                  <>{groups[group].name}</>
+                  <br />
+                  <>ID: {groups[group].id}</>
+                  <br />
+                  <>Created: {groups[group].created_at}</>
+                  <br />
+                  <>Updated: {groups[group].updated_at}</>
+                  <br />
+                  <>Messages: {groups[group].messages.length}</>
+                  <br />
+                  <Button>
+                    <Link to={`/app/messages/?gid=${groups[group].id}`}>
+                      Edit Messages
+                    </Link>
+                  </Button>
+                </Group>
+              </Box>
+            ))}
+          </GroupContainer>
+        ) : null}
       </Box>
     </Grommet>
   )

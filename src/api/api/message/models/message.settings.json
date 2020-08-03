@@ -28,6 +28,26 @@
     "date": {
       "type": "string",
       "required": true
+    },
+    "media": {
+      "model": "file",
+      "via": "related",
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos"
+      ],
+      "plugin": "upload",
+      "required": false
+    },
+    "links": {
+      "type": "json",
+      "required": true
+    },
+    "hasLinks": {
+      "type": "boolean",
+      "default": false,
+      "required": false
     }
   }
 }

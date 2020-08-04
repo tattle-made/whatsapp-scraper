@@ -1,8 +1,10 @@
+#!/usr/bin/env node
+
 const fsx = require("fs-extra");
 const MessageParser = require("./messageParser");
 const axios = require("axios");
+const chalk = require("chalk");
 require("dotenv").config();
-
 let token = null;
 
 async function createMessage(token, payload) {
@@ -133,8 +135,12 @@ async function getAuthToken() {
 }
 
 async function deleteAllMessages(token) {
+  const error = chalk.bold.red;
+  const warning = chalk.keyword("orange");
+  // create new progress bar
+
   axios
-    .get(process.env.STRAPI_URL + "/messages/?_start=0&_limit=500", {
+    .get(process.env.STRAPI_URL + "/messages?_start=0&_limit=500", {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -143,7 +149,6 @@ async function deleteAllMessages(token) {
       // Handle success.
       //   console.log("Data: ", response.data);
       response.data.reduce((accumulatorPromise, r) => {
-        console.log(`Deleted message ${r.id}`);
         return accumulatorPromise.then(() => {
           axios({
             method: "DELETE",
@@ -152,12 +157,16 @@ async function deleteAllMessages(token) {
               Authorization: `Bearer ${token}`,
             },
           });
+          process.stdout.write(
+            `Tattle Whatsapp Parser: Deleted message ${r.id}\r`
+          );
         });
       }, Promise.resolve());
     })
+    .then(() => console.log(warning("No messages to be deleted.")))
     .catch((error) => {
       // Handle error.
-      console.log("An error occurred:", error.response);
+      console.log(error("An error occurred:", error.response));
     });
 }
 
@@ -219,5 +228,27 @@ async function main() {
   }
 }
 
-main();
-// del();
+require("yargs")
+  .command("$0", "default", (argv) => {
+    console.log("add args `upload` or `delete`, eg `node upload.js delete`");
+  })
+  .command("upload", "creates groups, uploads msgs", function (argv) {
+    console.log(
+      chalk.red(`Tattle Whatsapp Parser: `),
+      chalk.green(`Uploading Scraped Data!`)
+    );
+    main();
+  })
+  .command("delete", "Delete all msgs and groups from db", function (argv) {
+    console.log(
+      chalk.red(`Tattle Whatsapp Parser: `),
+      chalk.blueBright(`Deleting Stored Data from Db!`),
+      chalk.bgBlue.yellowBright(
+        "\nYou might want to run this command a few times to delete all of the data."
+      )
+    );
+    del();
+  })
+  .help().argv;
+
+module.exports = { main, del };

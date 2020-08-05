@@ -19,6 +19,8 @@
     "json-dedupe": "^0.2.1",
     "jsonfile": "^6.0.1",
     "md5-file": "^5.0.0",
+    "random-name": "^0.1.2",
+    "simple-crypto-js": "^3.0.0",
     "whatsapp-chat-parser": "^2.0.8",
     "yargs": "^15.4.1"
   }

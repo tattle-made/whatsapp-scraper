@@ -69,10 +69,12 @@ const MessageViewer = ({ media, messages, limit, deleteMessages, update }) => {
           if (msg.id === m) {
             //find the currently selected message and toggle 'selected'
             msg.selected = !check
+
             //set current tags to INCLUDE tags in the current message
             let newCurrentTags = allCurrentTags.concat([
               ...msg.tags.map(tag => tag.name),
             ])
+
             setCurrentTags([...new Set(newCurrentTags)])
             // 'Set' because we don't want repetition
           }

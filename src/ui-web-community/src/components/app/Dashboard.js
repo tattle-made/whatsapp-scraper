@@ -60,9 +60,7 @@ const Dashboard = () => {
                   <br />
                   <>ID: {groups[group].id}</>
                   <br />
-                  <>Created: {groups[group].created_at}</>
-                  <br />
-                  <>Updated: {groups[group].updated_at}</>
+                  <>Participants: {groups[group].participants || "unknown"}</>
                   <br />
                   <>Messages: {groups[group].messages.length}</>
                   <br />

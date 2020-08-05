@@ -14,6 +14,9 @@
     },
     "messages": {
       "collection": "message"
+    },
+    "participants": {
+      "type": "integer"
     }
   }
 }

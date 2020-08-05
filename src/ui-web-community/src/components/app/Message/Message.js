@@ -20,6 +20,7 @@ const Message = ({
   onselect,
   selected,
   tags,
+  author,
 }) => {
   const isSystem = message.author === "System"
 
@@ -46,6 +47,7 @@ const Message = ({
               defaultChecked={false}
               onChange={handleCheck}
             />
+            <S.Author color={color}>{author}</S.Author>
           </S.MessageTop>
           {media ? <img src={media.src} alt="img" width="200px" /> : null}
           <S.Message>{message.content}</S.Message>

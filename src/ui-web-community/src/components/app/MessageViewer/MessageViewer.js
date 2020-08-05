@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react"
 import Swal from "sweetalert2"
 import axios from "axios"
-
+import random from "random-name"
 import ContextActionBar from "../ContextActionsBar/ContextActionBar"
 import Message from "../Message/Message"
 
@@ -34,6 +34,10 @@ const MessageViewer = ({ media, messages, limit, deleteMessages, update }) => {
 
   const colorMap = participants.reduce((obj, participant, i) => {
     return { ...obj, [participant]: authorColors[i % authorColors.length] }
+  }, {})
+
+  const randomNames = participants.reduce((obj, participant, i) => {
+    return { ...obj, [participant]: `${random.first()} from ${random.place()}` }
   }, {})
 
   const renderedMessages = displayedMessages.slice(0, limit)
@@ -69,12 +73,10 @@ const MessageViewer = ({ media, messages, limit, deleteMessages, update }) => {
           if (msg.id === m) {
             //find the currently selected message and toggle 'selected'
             msg.selected = !check
-
             //set current tags to INCLUDE tags in the current message
             let newCurrentTags = allCurrentTags.concat([
               ...msg.tags.map(tag => tag.name),
             ])
-
             setCurrentTags([...new Set(newCurrentTags)])
             // 'Set' because we don't want repetition
           }
@@ -402,6 +404,7 @@ const MessageViewer = ({ media, messages, limit, deleteMessages, update }) => {
               selected={message.selected}
               onselect={updateSelectedMessages}
               message={message}
+              author={randomNames[message.author]}
               color={colorMap[message.author]}
               isActiveUser={activeUser === message.author}
               sameAuthorAsPrevious={

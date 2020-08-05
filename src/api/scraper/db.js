@@ -114,10 +114,6 @@ async function deleteGroup(id, token) {
   });
 }
 
-async function getParticipants(groupid, token) {
-  console.log(groupid);
-}
-
 async function createMessage(token, payload) {
   // MESSAGE SCHEMA
   // {

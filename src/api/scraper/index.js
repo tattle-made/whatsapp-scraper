@@ -3,8 +3,9 @@ const readline = require("readline");
 const { google } = require("googleapis");
 const fsx = require("fs-extra");
 const GD = require("./google-drive");
+const chalk = require("chalk");
 const MessageParser = require("./messageParser");
-
+const Utils = require("./utils");
 // If modifying these scopes, delete token.json.
 const SCOPES = ["https://www.googleapis.com/auth/drive"];
 // The file token.json stores the user's access and refresh tokens, and is
@@ -85,12 +86,16 @@ function getAccessToken(oAuth2Client, callback) {
  */
 
 async function main(auth) {
-  console.log("main");
+  console.log(
+    chalk.red(`Tattle Whatsapp Parser: `),
+    chalk.green(`Getting Data from GDrive!`)
+  );
+
   const drive = google.drive({ version: "v3", auth });
   GD.getFileNames(drive).then((fileNames) => {
     Promise.all([
-      GD.processZipFiles(fileNames, drive),
-      GD.processTxtFiles(fileNames, drive),
+      // GD.processZipFiles(fileNames, drive),
+      // GD.processTxtFiles(fileNames, drive),
     ]).then((result) => {
       MessageParser.getFiles("./extracted").then((files) => {
         let textFiles = files.filter(
@@ -102,7 +107,7 @@ async function main(auth) {
           //if text file found
           MessageParser.getJSON(file).then((messages) => {
             // get messages from txt file
-            const jsonString = JSON.stringify(messages);
+            const jsonString = JSON.stringify(Utils.hashPhoneNumbers(messages));
             // make it JSON
             if (jsonString !== []) {
               const fileName = "./JSON/" + file;
@@ -119,10 +124,6 @@ async function main(auth) {
 
               // give the JSON file a timestamp
               // let jsonFileNameWithoutTimeStamp = f.replace(".txt", "");
-
-              // give the JSON file a timestamp
-
-              let jsonFileNameWithoutTimeStamp = f.replace(".txt", "");
 
               if (
                 jsonFileName.startsWith("./JSON/._") ||

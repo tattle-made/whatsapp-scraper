@@ -5,6 +5,7 @@ const MessageParser = require("./messageParser");
 const axios = require("axios");
 const chalk = require("chalk");
 require("dotenv").config();
+
 let token = null;
 
 async function getAuthToken() {
@@ -86,6 +87,20 @@ async function createGroup(token, payload) {
   return data;
 }
 
+async function updateGroup(token, id, payload) {
+  return axios({
+    method: "put",
+    url: process.env.STRAPI_URL + `/whatsapp-groups/${id}`,
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    data: payload,
+  }).catch((error) => {
+    // Handle error.
+    console.log("An error occurred:", error.response);
+  });
+}
+
 async function deleteGroup(id, token) {
   return axios({
     method: "DELETE",
@@ -97,6 +112,10 @@ async function deleteGroup(id, token) {
     // Handle error.
     console.log("An error occurred:", error.response);
   });
+}
+
+async function getParticipants(groupid, token) {
+  console.log(groupid);
 }
 
 async function createMessage(token, payload) {
@@ -373,8 +392,9 @@ require("yargs")
 
       if (argv.a) {
         console.log(chalk.blue("Upload Groups"));
+        uploadGroups();
         console.log(chalk.blue("Upload Messages"));
-        // main();
+        uploadMessages();
       }
     }
   )

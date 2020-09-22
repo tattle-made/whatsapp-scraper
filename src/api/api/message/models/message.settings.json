@@ -13,10 +13,6 @@
       "type": "text",
       "required": true
     },
-    "whatsapp_group": {
-      "model": "whatsapp-group",
-      "via": "messages"
-    },
     "tags": {
       "collection": "tag",
       "via": "messages"
@@ -33,21 +29,24 @@
       "model": "file",
       "via": "related",
       "allowedTypes": [
-        "images",
         "files",
+        "images",
         "videos"
       ],
       "plugin": "upload",
-      "required": false
+      "required": true
     },
     "links": {
       "type": "json",
-      "required": true
+      "required": false
     },
     "hasLinks": {
       "type": "boolean",
       "default": false,
       "required": false
+    },
+    "whatsapp_group": {
+      "model": "whatsapp-group"
     }
   }
 }

@@ -13,8 +13,10 @@
       "type": "string"
     },
     "messages": {
-      "via": "whatsapp_group",
       "collection": "message"
+    },
+    "participants": {
+      "type": "integer"
     }
   }
 }

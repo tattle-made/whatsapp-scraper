@@ -1,2 +1,8 @@
 .DS_Store
 node_modules
+python_scraper/scrape_*
+python_scraper/*.json
+python_scraper/*.pickle
+__pycache__
+.coverage
+htmlcov

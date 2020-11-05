@@ -26,7 +26,8 @@ from s3_mongo_helper import initialize_s3, initialize_mongo, upload_to_s3
 # If modifying these scopes, delete the file token.pickle.
 SCOPES = ('https://www.googleapis.com/auth/drive.readonly',)
 SCRAPER_SALT = os.environ.get('SCRAPER_SALT', '')
-
+UHASH_FIELDS = ('type', 'datetime', 'sender_id', 'group_id', 'content')
+MSG_DELETED = "This message was deleted"
 ACTION_HEADER = re.compile(r"(?P<dt>[0-9]+/[0-9]+/[0-9]+, [0-9]+:[0-9]+ (am|pm)) - (?P<pn>\+?[0-9 ]+) .*?$")
 MESSAGE_HEADER = re.compile(r"(?P<dt>[0-9]+/[0-9]+/[0-9]+, [0-9]+:[0-9]+ (am|pm)) - (?P<pn>\+?[0-9 ]+): (?P<tail>.*?)$")
 FILE_ATTACHED_RE = re.compile(r"(?P<fn>.*?) \(file attached\)$")
@@ -144,7 +145,22 @@ def encrypt_string(string: str, salt2="") -> str:
                                salt.encode(), 1).hex()
 
 
-def process_text_file(text_file: dict, media_files_by_name: dict) -> list:
+def get_uhash(msg: dict) -> str:
+    """
+    uhash is a hash of type, datetime, sender, group, and content
+    It is used in several places when detecting duplicate messages.
+    The tricky part is content. Usually we would need content to segregate
+    messages sent by the same person in the same minute (which is likely).
+    The problem is when a user deletes their message. When this happens, we
+    need to turn to the order of the message to determine which is which and
+    that requires some heuristics.
+    """
+    uhash_tups = sorted((k, v) for k, v in msg.items() if k in UHASH_FIELDS)
+    return encrypt_string(json.dumps(uhash_tups))
+
+
+def process_text_file(text_file: dict, media_files_by_name: dict,
+                      file_idx: int) -> list:
     """
     Given a whatsapp message thread text file, break that file into individual
     messages which are suitable for upload to mongo.
@@ -153,15 +169,15 @@ def process_text_file(text_file: dict, media_files_by_name: dict) -> list:
     group_id = encrypt_string(text_file['name'])
     msgs = []
     content_lines = text_file['content'].read().decode().split('\n')
-    current_msg = None
+    current_msg = {}
     for content_line in content_lines:
         if match := ACTION_HEADER.match(content_line):
             if current_msg:
                 msgs.append(current_msg)
-            current_msg = None
+                current_msg = {}
+            # action header is a subset of message header so this
+            # falls through
         if match := MESSAGE_HEADER.match(content_line):
-            if current_msg:
-                msgs.append(current_msg)
             current_msg = {}
             dt_raw = match['dt']
             dt = dt_parser.parse(dt_raw)
@@ -175,10 +191,13 @@ def process_text_file(text_file: dict, media_files_by_name: dict) -> list:
             continue
         if current_msg:
             current_msg['content'] += '\n' + content_line
+    if current_msg:
+        msgs.append(current_msg)
 
     for i, msg in enumerate(msgs):
-        uhash_raw = json.dumps(sorted(msg.items()))
-        msg['uhash'] = encrypt_string(uhash_raw)
+        msg['content'] = msg['content'].strip()
+        msg['uhash'] = get_uhash(msg)
+        msg['file_idx'] = file_idx
         msg['order'] = i
         if match := FILE_ATTACHED_RE.match(msg['content']):
             if match['fn'] in media_files_by_name:
@@ -236,7 +255,7 @@ def group_msgs(msgs: list) -> dict:
     for msg in msgs:
         msgs_by_group[msg['group_id']].append(msg)
     for msgs_in_group in msgs_by_group.values():
-        msgs_in_group.sort(key=lambda m: m['order'])
+        msgs_in_group.sort(key=msg_sort)
     return dict(msgs_by_group)
 
 
@@ -275,6 +294,114 @@ def update_msg_order_from_existing(msgs: list, existing_msgs: list) -> None:
             adjust_order(msgs_in_new_group, order_diff)
 
 
+def msg_sort(msg: dict) -> tuple:
+    """
+    When sorting messages, the lowest datetime always comes first.
+    In the case of the tie, we rely on the fact that we have calculated the order.
+    In the case of another tie, prefer the message that was NOT deleted
+    """
+    return (msg['datetime'], msg['order'], msg['content'] == MSG_DELETED)
+
+
+def merge_msgs_in_group(all_msgs: list) -> list:
+    """
+    We could easily get multiple files from the same group. Merge these.
+    This function is unfortunately complicated so there are plenty of comments.
+    """
+
+    all_uhashes_not_deleted = set(m['uhash'] for m in all_msgs
+                                  if m['content'] != MSG_DELETED)
+    assert len(set(m['group_id'] for m in all_msgs)) == 1
+    if len(set(m['file_idx'] for m in all_msgs)) == 1:
+        # If we are only dealing with one file, no need to merge
+        assert len(set(m['uhash'] for m in all_msgs)) == len(all_msgs)
+        return all_msgs
+
+    # 1. Sort messages and bucket them by file_idx
+    all_msgs.sort(key=msg_sort)
+    msgs_by_file = collections.defaultdict(list)
+    for msg in all_msgs:
+        msgs_by_file[msg['file_idx']].append(msg)
+
+    # 2. The earliest message will be the first file chosen for processing and
+    # the entirety of this file will make up the returned value (ret)
+    first_msg = all_msgs[0]
+    ret = msgs_by_file[first_msg['file_idx']]
+    del msgs_by_file[first_msg['file_idx']]
+
+    print("first_msg", all_msgs[0])
+
+    # 3. Iteratively eliminate the other files. Notice that in all cases of the
+    #    loop, an item from msgs_by_file is deleted
+    while msgs_by_file:
+        # 3a. We'll be comparing against each other file so get messages
+        #     out from all of these. Discard all messages older than the newest
+        #     available
+        other_msgs = []
+        for file_idx, file_msgs in msgs_by_file.items():
+            file_msgs = [m for m in file_msgs
+                         if m['datetime'] >= ret[-1]['datetime']]
+            msgs_by_file[file_idx] = file_msgs
+            other_msgs += file_msgs
+        msgs_by_file = {k: v for k, v in msgs_by_file.items() if len(v)}
+        if not msgs_by_file:
+            break
+
+        other_msgs.sort(key=msg_sort)
+        hashes_by_msg = {m['uhash']: m for m in other_msgs}
+
+        # 3b. In reverse order, check the last messages of the current ret
+        #     to find a "connector". It is assumed this connector msg will
+        #     be found quickly most of the time and only will not be if messages
+        #     were deleted or, in the worst case, if there is no overlap between
+        #     files.
+        #     If we find that connector, calculate the order difference and
+        #     adjust to the new order. At the end, append the messages.
+        for last_msg in reversed(ret):
+            connector_msg = hashes_by_msg.get(last_msg['uhash'])
+            if not connector_msg:
+                continue
+
+            order_diff = last_msg['order'] - connector_msg['order']
+            msgs_to_add = msgs_by_file[connector_msg['file_idx']]
+            for msg in msgs_to_add:
+                msg['order'] += order_diff
+            msgs_to_add = [m for m in msgs_to_add
+                           if m['order'] > ret[-1]['order']]
+            msgs_to_add.sort(key=lambda m: m['order'])
+            ret += msgs_to_add
+            del msgs_by_file[connector_msg['file_idx']]
+            break
+        else:
+            # 3c. If we didn't find a single uhash that matched, that means
+            #     there was no overlap. Append the next oldest set of messages
+            #     and continue
+            first_msg = other_msgs[0]
+            order_diff = ret[-1]['order'] - first_msg['order']
+            msgs_to_add = msgs_by_file[first_msg['file_idx']]
+            for msg in msgs_to_add:
+                msg['order'] += order_diff + 1
+            ret += msgs_to_add
+            del msgs_by_file[first_msg['file_idx']]
+
+    assert len(set(m['order'] for m in ret)) == len(ret)
+    assert all_uhashes_not_deleted - set(m['uhash'] for m in ret) == set()
+    return ret
+
+
+def merge_msgs(msgs: list) -> list:
+    """
+    We could easily get multiple files from the same group. Merge these.
+    """
+
+    msgs_by_group = group_msgs(msgs)
+
+    ret = []
+    for msgs_in_group in msgs_by_group.values():
+        ret += merge_msgs_in_group(msgs_in_group)
+    return ret
+
+
 def save_to_server(msgs: list, media_files: list) -> None:
     """
     Save msgs and media to the Tattle server.
@@ -308,8 +435,8 @@ def save_to_server(msgs: list, media_files: list) -> None:
 def main(creds_path: str, google_drive_url: str, local: bool,
          skip_media: bool) -> None:
     """
-    Six steps to download a WhatsApp dump, extract messages, and save messages
-    and media.
+    Seven steps to download a WhatsApp dump, extract messages,
+    and save messages and media.
     """
 
     # 0. Validate salt
@@ -344,14 +471,19 @@ def main(creds_path: str, google_drive_url: str, local: bool,
 
     # 4. Download whatsapp text contents and extract individual messages
     msgs = []
-    for text_file in text_files:
+    for file_idx, text_file in enumerate(text_files):
         download_content_to_file(text_file, gdrive_service)
-        msgs += process_text_file(text_file, media_files_by_name)
+        msgs += process_text_file(text_file, media_files_by_name, file_idx)
     media_msgs = [m for m in msgs if m['type'] == 'media']
     logging.info("Processed %d msgs (%d text, %d media)",
                  len(msgs), len(msgs) - len(media_msgs), len(media_msgs))
 
-    # 5. Download media files that are referenced in a message
+    # 5. Merge messages from identical files together
+    msgs = merge_msgs(msgs)
+    for msg in msgs:
+        del msg['file_idx']
+
+    # 6. Download media files that are referenced in a message
     media_files = filter_superfluous_media_files(media_files, media_msgs)
     if skip_media:
         logging.warning("Skipping download of %d media files", len(media_files))
@@ -361,7 +493,7 @@ def main(creds_path: str, google_drive_url: str, local: bool,
         for media_file in media_files:
             download_content_to_file(media_file, gdrive_service, verbose=True)
 
-    # 6. Save
+    # 7. Save
     if local:
         save_to_local(drive_id, msgs, media_files)
         return

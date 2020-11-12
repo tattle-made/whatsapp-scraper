@@ -31,7 +31,7 @@ MSG_DELETED = "This message was deleted"
 ACTION_HEADER = re.compile(r"(?P<dt>[0-9]+/[0-9]+/[0-9]+, [0-9]+:[0-9]+ (am|pm)) - (?P<pn>\+?[0-9 ]+) .*?$")
 MESSAGE_HEADER = re.compile(r"(?P<dt>[0-9]+/[0-9]+/[0-9]+, [0-9]+:[0-9]+ (am|pm)) - (?P<pn>\+?[0-9 ]+): (?P<tail>.*?)$")
 FILE_ATTACHED_RE = re.compile(r"(?P<fn>.*?) \(file attached\)$")
-GDRIVE_RE = re.compile(r"(?:https://|)drive\.google\.com/.*?/folders/(?P<drive_id>[a-zA-Z0-9-]+)")
+GDRIVE_RE = re.compile(r"(?:https://|)drive\.google\.com/.*?/folders/(?P<drive_id>[a-zA-Z0-9_-]+)")
 
 # Silence unneccesary google api warnings
 # https://github.com/googleapis/google-api-python-client/issues/299
@@ -314,7 +314,7 @@ def merge_msgs_in_group(all_msgs: list) -> list:
     assert len(set(m['group_id'] for m in all_msgs)) == 1
     if len(set(m['file_idx'] for m in all_msgs)) == 1:
         # If we are only dealing with one file, no need to merge
-        assert len(set(m['uhash'] for m in all_msgs)) == len(all_msgs)
+        assert len(set((m['order'], m['uhash']) for m in all_msgs)) == len(all_msgs)
         return all_msgs
 
     # 1. Sort messages and bucket them by file_idx

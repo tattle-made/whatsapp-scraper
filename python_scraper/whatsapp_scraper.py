@@ -12,7 +12,6 @@ import pickle
 import re
 import secrets
 import shutil
-import uuid
 from typing import List, Dict
 
 from dateutil import parser as dt_parser
@@ -21,8 +20,9 @@ from googleapiclient.http import MediaIoBaseDownload
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from google.oauth2 import service_account
+from pymongo import MongoClient
 
-from s3_mongo_helper import initialize_s3, initialize_mongo, upload_to_s3
+from s3_mongo_helper import initialize_s3, upload_to_s3
 
 # If modifying these scopes, delete the file token.pickle.
 SCOPES = ('https://www.googleapis.com/auth/drive.readonly',)
@@ -32,10 +32,11 @@ MEDIA_OMITTED = "<Media omitted>"
 SKIP_MSGS = (MSG_DELETED, MEDIA_OMITTED)
 ACTION_HEADER = re.compile(r"(?P<day>[0-9]+/[0-9]+/[0-9]+), (?P<tm>[0-9]+:[0-9]+ (am|pm)) - (?P<pn>\+?[0-9 ]+) .*?$")
 MESSAGE_HEADER = re.compile(r"(?P<day>[0-9]+/[0-9]+/[0-9]+), (?P<tm>[0-9]+:[0-9]+ (am|pm)) - (?P<pn>\+?[0-9 ]+): (?P<tail>.*?)$")
-FILE_ATTACHED_RE = re.compile(r"(?P<fn>.*?) \(file attached\)$")
+FILE_ATTACHED_RE = re.compile(r"(?P<fn>.*?) \(file attached\)")
 GDRIVE_RE = re.compile(r"(?:https://|)drive\.google\.com/.*?/folders/(?P<drive_id>[a-zA-Z0-9_-]+)")
 DAY_FMT = "%d/%m/%y"
 MINUTES = datetime.timedelta(seconds=60)
+GOOGLE_DRIVE = "GOOGLE_DRIVE"
 
 # Silence unneccesary google api warnings
 # https://github.com/googleapis/google-api-python-client/issues/299
@@ -45,26 +46,36 @@ logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.ERROR)
 class Msg():
     __slots__ = [
         'dt',
-        'msg_type',
         'sender_id',
+        'source_type',
+        'source_loc',
         'group_id',
         'content',
         'order',
         'file_idx',
-        'file_modified',
-        'mime_type',
+        'file_datetime',
+        'has_media',
+        'media_file',
+        'media_upload_loc',
+        'media_mime_type',
     ]
 
     def __init__(self, **kwargs):
         self.dt = kwargs.pop('dt', None)
-        self.msg_type = kwargs.pop('msg_type', "")
+        if not self.dt and 'datetime' in kwargs:
+            self.dt = datetime.datetime.fromisoformat(kwargs['datetime'])
+        self.has_media = kwargs.pop('has_media', False)
         self.sender_id = kwargs.pop('sender_id', "")
         self.group_id = kwargs.pop('group_id', "")
+        self.source_type = kwargs.pop('source_type', GOOGLE_DRIVE)
+        self.source_loc = kwargs.pop('source_loc', "")
         self.content = kwargs.pop('content', "")
         self.order = kwargs.pop('order', None)
         self.file_idx = kwargs.pop('file_idx', None)
-        self.file_modified = None
-        self.mime_type = None
+        self.file_datetime = kwargs.pop('file_datetime', None)
+        self.media_file = kwargs.pop('media_file', {})
+        self.media_upload_loc = kwargs.pop('media_upload_loc', None)
+        self.media_mime_type = kwargs.pop('media_mime_type', None)
         assert not kwargs
 
     def __repr__(self):
@@ -78,29 +89,46 @@ class Msg():
                 and self.content == other.content)
 
     @staticmethod
-    def from_match(match: re.Match, group_id: str, file_idx: int):
+    def create(match: re.Match, group_id: str, file_idx: int, source_loc: str):
         day_raw = match['day']
         day = datetime.datetime.strptime(day_raw, DAY_FMT).date()
         tm_raw = match['tm']
         tm = dt_parser.parse(tm_raw).time()
         return Msg(
             dt=datetime.datetime.combine(day, tm),
-            msg_type='text',
             sender_id=encrypt_string(match['pn'].strip(), group_id),
             group_id=group_id,
+            source_loc=source_loc,
             content=match['tail'],
             file_idx=file_idx,
         )
 
     def as_dict(self):
         return {
-            'msg_type': self.msg_type,
             'datetime': self.dt.isoformat(),
+            'source_type': self.source_type,
+            'source_loc': self.source_loc,
             'sender_id': self.sender_id,
             'group_id': self.group_id,
             'content': self.content,
             'order': self.order,
-            'mime_type': self.mime_type,
+            'has_media': self.has_media,
+            'media_upload_loc': self.media_upload_loc,
+            'media_mime_type': self.media_mime_type,
+        }
+
+    def from_dict(self, dict):
+        return {
+            'datetime': self.dt.isoformat(),
+            'source_type': self.source_type,
+            'source_loc': self.source_loc,
+            'sender_id': self.sender_id,
+            'group_id': self.group_id,
+            'content': self.content,
+            'order': self.order,
+            'has_media': self.has_media,
+            'media_upload_loc': self.media_upload_loc,
+            'media_mime_type': self.media_mime_type,
         }
 
     def is_original(self):
@@ -112,36 +140,43 @@ class Msg():
     def set_order(self, order: int):
         self.order = order
 
-    def set_file_modified(self, file_modified: datetime.datetime):
-        self.file_modified = file_modified
+    def set_file_datetime(self, file_datetime: datetime.datetime):
+        self.file_datetime = file_datetime
 
     def make_media_msg(self, media_file: dict):
+        self.has_media = True
+        self.media_file = media_file or {}
+
+    def process_media_msg(self):
         """
-        Media messages have:
-        - a different msg_type
-        - content points to the uuid of the actual media in the s3
-        - a mime_type
+        After we've downloaded the media message, we can process it
         """
-        self.msg_type = 'media'
-        self.content = media_file['uuid']
-        self.mime_type = media_file['mimeType']
+        if self.media_file:
+            self.media_upload_loc = self.media_file.get('hash')
+            self.media_mime_type = self.media_file['mimeType']
 
     def merge(self, other):
         """
-        Given two Msg objects, merge the best of both
+        Given two Msg objects, merge the one with better content
         """
         assert self.sender_id == other.sender_id
         assert self.group_id == other.group_id
 
-        content_msg = sorted([self, other], key=content_sort)[0]
-        latest_dt = max((self, other), key=lambda m: m.file_modified).dt
+        content_msg = sorted([self, other], key=content_sort)[-1]
 
         return Msg(
-            dt=latest_dt,
-            msg_type=content_msg.msg_type,
+            dt=content_msg.dt,
             sender_id=self.sender_id,
             group_id=self.group_id,
+            source_type=content_msg.source_type,
+            source_loc=content_msg.source_loc,
             content=content_msg.content,
+            file_datetime=content_msg.file_datetime,
+            has_media=content_msg.has_media,
+            media_file=content_msg.media_file,
+            media_upload_loc=content_msg.media_upload_loc,
+            media_mime_type=content_msg.media_mime_type,
+
         )
 
 
@@ -151,8 +186,10 @@ def content_sort(msg: Msg) -> tuple:
     content_sort[0] will be content which is NOT deleted first
     a.k.a True > False
     """
-    return (not msg.is_original(),
-            msg.msg_type != "media")
+    return (msg.is_original(),
+            msg.has_media,
+            msg.media_upload_loc,
+            msg.media_file)
 
 
 def get_gdrive_service(creds_path: str) -> Resource:
@@ -166,7 +203,7 @@ def get_gdrive_service(creds_path: str) -> Resource:
     assert os.path.exists(creds_path)
     with open(creds_path) as f:
         jobj = json.loads(f.read())
-        is_service_account = jobj.get('msg_type') == 'service_account'
+        is_service_account = jobj.get('has_media') == 'service_account'
 
     if is_service_account:
         creds = service_account.Credentials.from_service_account_file(
@@ -231,8 +268,7 @@ def separate_text_and_media_files(files: list) -> (list, list):
     return text_files, media_files
 
 
-def download_content_to_file(file_dict: dict, gdrive_service: Resource,
-                             verbose=False) -> None:
+def download_content_to_file(file_dict: dict, gdrive_service: Resource):
     """
     Download the file content from S3. This modifies the file dict in-place.
     """
@@ -248,8 +284,7 @@ def download_content_to_file(file_dict: dict, gdrive_service: Resource,
         _, done = downloader.next_chunk()
     fh.seek(0)
     file_dict['content'] = fh
-    if verbose:
-        logging.info("Downloaded %r", file_dict['uuid'])
+    logging.info("Downloaded %r (%s).", file_id, file_dict['mimeType'])
 
 
 def encrypt_string(string: str, salt2="") -> str:
@@ -262,7 +297,7 @@ def encrypt_string(string: str, salt2="") -> str:
 
 
 def process_text_file(text_file: dict, media_files_by_name: dict,
-                      file_idx: int) -> list:
+                      file_idx: int, source_loc: str) -> list:
     """
     Given a whatsapp message thread text file, break that file into individual
     messages which are suitable for upload to mongo.
@@ -280,8 +315,8 @@ def process_text_file(text_file: dict, media_files_by_name: dict,
             if current_msg:
                 msgs.append(current_msg)
                 current_msg = None
-        if match := MESSAGE_HEADER.match(content_line):
-            current_msg = Msg.from_match(match, group_id, file_idx)
+        if msg_match := MESSAGE_HEADER.match(content_line):
+            current_msg = Msg.create(msg_match, group_id, file_idx, source_loc)
             continue
         if current_msg:
             current_msg.add_content_line(content_line)
@@ -290,15 +325,14 @@ def process_text_file(text_file: dict, media_files_by_name: dict,
 
     # 2. With all the messages, do some processing on each
     if msgs:
-        file_modified = msgs[-1].dt
+        file_datetime = msgs[-1].dt
         for i, msg in enumerate(msgs):
             msg.set_order(i)
             msg.content = msg.content.strip()
-            msg.set_file_modified(file_modified)
-            if match := FILE_ATTACHED_RE.match(msg.content):
-                if match['fn'] in media_files_by_name:
-                    media_file = media_files_by_name[match['fn']]
-                    msg.make_media_msg(media_file)
+            msg.set_file_datetime(file_datetime)
+            if attach_match := FILE_ATTACHED_RE.match(msg.content):
+                media_file = media_files_by_name.get(attach_match['fn'])
+                msg.make_media_msg(media_file)
 
     logging.info("Processed WhatsApp group %r", group_id)
     return msgs
@@ -312,21 +346,28 @@ def filter_superfluous_media_files(media_files: list, media_msgs: list) -> list:
 
     filtered_media_files = []
     for media_file in media_files:
-        if any(media_file['uuid'] == m.content for m in media_msgs):
+        if any(media_file['name'] == m.media_file.get('name')
+               for m in media_msgs):
             filtered_media_files.append(media_file)
     return filtered_media_files
 
 
-def save_to_local(drive_id: str, msgs: List[Msg], media_files: list,
-                  skip_media: bool) -> None:
+def save_to_local(drive_id: str, all_msgs: List[Msg], merged_msgs: List[Msg],
+                  media_files: list, skip_media: bool) -> None:
     """
     Save messages and media to the filesystem.
     """
     today = datetime.date.today().isoformat().replace('-', '_')
-    json_fn = f"scrape_{today}_{drive_id}.json"
-    with open(json_fn, 'w') as f:
-        f.write(json.dumps([m.as_dict() for m in msgs]))
-        logging.info("Wrote messages to %r", json_fn)
+
+    fn = f"all_scrape_{today}_{drive_id}.json"
+    with open(fn, 'w') as f:
+        f.write(json.dumps([m.as_dict() for m in all_msgs]))
+        logging.info("Wrote %d messages to %r", len(all_msgs), fn)
+
+    fn = f"merged_scrape_{today}_{drive_id}.json"
+    with open(fn, 'w') as f:
+        f.write(json.dumps([m.as_dict() for m in merged_msgs]))
+        logging.info("Wrote %d messages to %r", len(merged_msgs), fn)
 
     if skip_media:
         return
@@ -340,60 +381,91 @@ def save_to_local(drive_id: str, msgs: List[Msg], media_files: list,
             return
     os.makedirs(media_dir)
     for media_file in media_files:
-        path = os.path.join(media_dir, media_file['uuid'])
+        path = os.path.join(media_dir, media_file['hash'])
         with open(path, 'wb') as f:
             f.write(media_file['content'].read())
     logging.info("Wrote %d media files to %r. Done", len(media_files), media_dir)
 
 
-def save_to_server(new_msgs: List[Msg], media_files: list) -> None:
+def initialize_mongo():
+    db_username = os.environ.get("WHATSAPP_DB_USERNAME")
+    db_password = os.environ.get("WHATSAPP_DB_PASSWORD")
+    mongo_url = f"mongodb+srv://{db_username}:{db_password}@tattle-data-fkpmg.mongodb.net/test?retryWrites=true&w=majority&ssl=true&ssl_cert_reqs=CERT_NONE"
+    cli = MongoClient(mongo_url)
+    db = cli[os.environ.get("WHATSAPP_DB_NAME")]
+    all_coll = db[os.environ.get("WHATSAPP_ALL_DB_COLLECTION")]
+    merged_coll = db[os.environ.get("WHATSAPP_MERGED_DB_COLLECTION")]
+    return all_coll, merged_coll
+
+
+def save_to_server(all_msgs: List[Msg], merged_msgs: List[Msg],
+                   media_files: list, drive_id: str) -> None:
     """
     Save msgs and media to the Tattle server.
     This requires setting environment variables
     """
 
-    msg_gids = [msg.group_id for msg in new_msgs]
-
+    # 0. Initialize
+    all_coll, merged_coll = initialize_mongo()
     aws, bucket, s3 = initialize_s3()
-    coll = initialize_mongo(var_prefix="whatsapp")
 
-    existing_msgs = coll.find({"group_id": {"$in": msg_gids}})
+    # 1. Insert all "raw" msgs
+    all_coll = initialize_mongo(var_prefix="whatsapp_all")
+    msgs_by_file = group_by_file(all_msgs).values()
+    to_insert = []
+    insert_dt = datetime.datetime.utcnow().isoformat()
+    for msgs in msgs_by_file.values():
+        to_insert.append({
+            'scrape_datetime': insert_dt,
+            'source': GOOGLE_DRIVE,
+            'source_loc': drive_id,
+            'msgs': [m.as_dict() for m in msgs]
+        })
+    all_coll.insert_many(to_insert)
+
+    # 2. Upsert merged msgs
+    merged_coll = initialize_mongo(var_prefix="whatsapp_merged")
+    msg_gids = [msg.group_id for msg in merged_msgs]
+    existing_msgs = merged_coll.find({"group_id": {"$in": msg_gids}})
     if existing_msgs:
         logging.warning("Not overwriting %d msgs already in server.",
                         len(existing_msgs))
-        merge_msgs_from_server(new_msgs, existing_msgs)
-    coll.insert_many(new_msgs)
+        merge_msgs_from_server(merged_msgs, existing_msgs)
+    merged_coll.insert_many([m.as_dict() for m in merged_msgs])
 
+    # 3. Upload media files to s3
     for fl in media_files:
-        logging.info("Uploading %r", fl['uuid'])
-        upload_to_s3(s3, fl['content'], fl['uuid'], bucket, fl['mime_type'])
+        logging.info("Uploading %r", fl['hash'])
+        upload_to_s3(s3, fl['content'], fl['hash'], bucket, fl['media_mime_type'])
     logging.info("Wrote %d files to S3. Done", len(media_files))
 
 
 def group_msgs(msgs: List[Msg]) -> Dict[str, List[Msg]]:
     """
-    Group messages by their group_id and return correctly sorted by order
+    Group messages by their group_id & drive_id and return sorted
     """
     msgs_by_group = collections.defaultdict(list)
     for msg in msgs:
-        msgs_by_group[msg.group_id].append(msg)
+        group_key = (msg.source_type, msg.source_loc, msg.group_id)
+        msgs_by_group[group_key].append(msg)
     for msgs_in_group in msgs_by_group.values():
         msgs_in_group.sort(key=msg_sort)
     return dict(msgs_by_group)
 
 
 def merge_msgs_from_server(msgs: List[Msg],
-                           existing_msgs: List[Msg]) -> None:
+                           existing_msgs: List[dict]) -> None:
     """
     Whatsapp has a 10k message limit per group. It's likely therefore that
     we will get overlapping messages and the order on the new message will be
     wrong. This detects the overlap and updates the original msgs order
     """
-    msgs_by_group = group_msgs(msgs)
+    existing_msgs = [Msg.from_dict(m) for m in existing_msgs]
     existing_msgs_by_group = group_msgs(existing_msgs)
+    msgs_by_group = group_msgs(msgs)
 
-    for group_id, msgs_in_new_group in msgs_by_group.items():
-        msgs_in_old_group = existing_msgs_by_group.get(group_id)
+    for group_key, msgs_in_new_group in msgs_by_group.items():
+        msgs_in_old_group = existing_msgs_by_group.get(group_key)
         if not msgs_in_old_group:
             continue
         assert msgs_in_old_group[0].dt <= msgs_in_new_group[0].dt
@@ -405,7 +477,7 @@ def merge_msgs_from_server(msgs: List[Msg],
         # messages we actually need to write are after all the old messages
         # limit them and write the new messages
         msgs_not_on_mongo = merged_msgs[len(msgs_in_old_group):]
-        msgs_by_group[group_id] = msgs_not_on_mongo
+        msgs_by_group[group_key] = msgs_not_on_mongo
 
 
 def msg_sort(msg: Msg) -> tuple:
@@ -542,7 +614,18 @@ def merge_two_msg_lists(msgs_a: List[Msg], msgs_b: List[Msg]) -> List[Msg]:
     return merged
 
 
-def merge_msgs_in_group(msgs_in_grp: list) -> list:
+def group_by_file(msgs: List[Msg]) -> Dict[int, List[Msg]]:
+    """
+    Group messages by file and return sorted
+    """
+    msgs.sort(key=msg_sort)
+    msgs_by_file = collections.defaultdict(list)
+    for msg in msgs:
+        msgs_by_file[msg.file_idx].append(msg)
+    return dict(msgs_by_file)
+
+
+def merge_msgs_in_group(group_id: str, msgs_in_grp: list) -> list:
     """
     We often get multiple sets of messages from the same group.
     For example, if two text files are in one dump or if we need to update
@@ -555,20 +638,21 @@ def merge_msgs_in_group(msgs_in_grp: list) -> list:
     assert len(set(m.group_id for m in msgs_in_grp)) == 1
 
     # 1. Sort messages and bucket them by file_idx
-    msgs_in_grp.sort(key=msg_sort)
-    msgs_by_file = collections.defaultdict(list)
-    for msg in msgs_in_grp:
-        msgs_by_file[msg.file_idx].append(msg)
+    msgs_by_file = group_by_file(msgs_in_grp)
     msgs_by_file = list(msgs_by_file.values())
     num_files = len(msgs_by_file)
+    min_msgs_by_file = min(len(msgs) for msgs in msgs_by_file)
+    max_msgs_by_file = max(len(msgs) for msgs in msgs_by_file)
+    avg_msgs_by_file = sum(len(msgs) for msgs in msgs_by_file) / num_files
 
     # 2. Return if only one file came in
     if num_files == 1:
+        logging.info("No need to merge %s", group_id)
         assert set(m.order for m in msgs_in_grp) == set(range(len(msgs_in_grp)))
         return msgs_in_grp
 
     # 3. Iteratively merge different files
-    logging.info("Merging %d files...", num_files)
+    logging.info("Merging %d files from %s...", num_files, group_id)
     ret = msgs_by_file.pop()
     while msgs_by_file:
         other_msgs = msgs_by_file.pop()
@@ -583,8 +667,12 @@ def merge_msgs_in_group(msgs_in_grp: list) -> list:
 
     assert set(m.order for m in ret) == set(range(len(ret)))
 
-    logging.info("Merged %d files with an avg of %d messages to %d messages",
-                 num_files, len(msgs_in_grp) / num_files, len(ret))
+    logging.info("Merged %d files [min:%d avg:%d max:%d] to %d messages",
+                 num_files,
+                 min_msgs_by_file,
+                 avg_msgs_by_file,
+                 max_msgs_by_file,
+                 len(ret))
     return ret
 
 
@@ -595,13 +683,22 @@ def merge_all_msgs(msgs: list) -> list:
 
     msgs_by_group = group_msgs(msgs)
     ret = []
-    for msgs_in_group in msgs_by_group.values():
-        ret += merge_msgs_in_group(msgs_in_group)
+    for group_key, msgs_in_group in msgs_by_group.items():
+        ret += merge_msgs_in_group(group_key[2], msgs_in_group)
     return ret
 
 
+def set_media_hash(media_file: dict) -> None:
+    """
+    Set the hash so that we can track content over time
+    """
+    media_content = media_file['content'].read()
+    media_file['hash'] = hashlib.sha256(media_content).hexdigest()
+    media_file['content'].seek(0)
+
+
 def main(creds_path: str, google_drive_url: str, local: bool,
-         skip_media: bool) -> None:
+         skip_media: bool, salt_not_required: bool) -> None:
     """
     Seven steps to download a WhatsApp dump, extract messages,
     and save messages and media.
@@ -610,9 +707,13 @@ def main(creds_path: str, google_drive_url: str, local: bool,
     # 0. Validate salt
     global SCRAPER_SALT
     if not SCRAPER_SALT:
-        logging.warning("The SCRAPER_SALT env is not set. "
-                        "Anonymization will not be deterministic")
-        SCRAPER_SALT = secrets.token_hex()
+        if salt_not_required:
+            logging.warning("The SCRAPER_SALT env is not set. "
+                            "Anonymization will not be deterministic")
+            SCRAPER_SALT = secrets.token_hex()
+        else:
+            logging.warning("Set the SCRAPER_SALT env variable. ")
+            return
 
     # 1. Setup google drive
     drive_url_match = GDRIVE_RE.match(google_drive_url)
@@ -629,41 +730,44 @@ def main(creds_path: str, google_drive_url: str, local: bool,
                         drive_id)
         exit(1)
     text_files, media_files = separate_text_and_media_files(files)
-    logging.info("Retrieved %d files (%d groups %d media) files from %r",
+    logging.info("Retrieved %d files (%d text %d media) files from %r",
                  len(files), len(text_files), len(media_files), drive_id)
 
     # 3. Prepare media file dicts
-    for media_file in media_files:
-        media_file['uuid'] = str(uuid.uuid4())
     media_files_by_name = {afd['name']: afd for afd in media_files}
 
     # 4. Download whatsapp text contents and extract individual messages
     msgs = []
     for file_idx, text_file in enumerate(text_files):
         download_content_to_file(text_file, gdrive_service)
-        msgs += process_text_file(text_file, media_files_by_name, file_idx)
-    media_msgs = [m for m in msgs if m.msg_type == 'media']
-    logging.info("Processed %d msgs (%d text, %d media)",
-                 len(msgs), len(msgs) - len(media_msgs), len(media_msgs))
+        msgs += process_text_file(text_file, media_files_by_name,
+                                  file_idx, drive_id)
+    media_msgs = [m for m in msgs if m.has_media]
+    logging.info("Processed %d msgs (%d with media)",
+                 len(msgs), len(media_msgs))
 
-    # 5. Merge messages from identical files together
-    msgs = merge_all_msgs(msgs)
-
-    # 6. Download media files that are referenced in a message
+    # 5. Download media files that are referenced in a message
     media_files = filter_superfluous_media_files(media_files, media_msgs)
     if skip_media:
-        logging.warning("Skipping download of %d media files", len(media_files))
+        logging.warning("Skipped download of %d media files.", len(media_files))
         media_files = []
     else:
-        logging.info("Downloading %d media files", len(media_files))
+        logging.info("Downloading %d media files...", len(media_files))
         for media_file in media_files:
-            download_content_to_file(media_file, gdrive_service, verbose=True)
+            download_content_to_file(media_file, gdrive_service)
+        for media_files in media_files:
+            set_media_hash(media_file)
+        for media_msg in media_msgs:
+            media_msg.process_media_msg()
+
+    # 6. Merge messages from identical files together
+    merged_msgs = merge_all_msgs(msgs)
 
     # 7. Save
     if local:
-        save_to_local(drive_id, msgs, media_files, skip_media)
+        save_to_local(drive_id, msgs, merged_msgs, media_files, skip_media)
         return
-    save_to_server(msgs, media_files)
+    save_to_server(msgs, merged_msgs, media_files)
 
 
 if __name__ == '__main__':
@@ -676,10 +780,13 @@ if __name__ == '__main__':
                         help='Save data/media locally instead of uploading')
     parser.add_argument('--skip-media', action='store_true',
                         help="Skip downloading / uploading media files")
+    parser.add_argument('--salt-not-required', action='store_true',
+                        help="OK that anonymization is not deterministic")
     parser.add_argument('--verbose', action='store_true')
     args = parser.parse_args()
 
     if args.verbose:
         logging.basicConfig(level=logging.INFO)
 
-    main(args.credentials, args.google_drive_url, args.local, args.skip_media)
+    main(args.credentials, args.google_drive_url, args.local, args.skip_media,
+         args.salt_not_required)

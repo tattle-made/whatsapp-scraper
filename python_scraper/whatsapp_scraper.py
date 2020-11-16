@@ -413,7 +413,7 @@ def save_to_server(all_msgs: List[Msg], merged_msgs: List[Msg],
 
     # 1. Insert all "raw" msgs
     all_coll = initialize_mongo(var_prefix="whatsapp_all")
-    msgs_by_file = group_by_file(all_msgs).values()
+    msgs_by_file = group_by_file(all_msgs)
     to_insert = []
     insert_dt = datetime.datetime.utcnow().isoformat()
     for msgs in msgs_by_file.values():

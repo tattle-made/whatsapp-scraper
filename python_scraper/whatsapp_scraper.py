@@ -349,11 +349,13 @@ def filter_superfluous_media_files(media_files: list, media_msgs: list) -> list:
         if any(media_file['name'] == m.media_file.get('name')
                for m in media_msgs):
             filtered_media_files.append(media_file)
+    logging.info("Filtered out %d/%s media files",
+                 len(media_files) - len(filtered_media_files), len(media_files))
     return filtered_media_files
 
 
 def save_to_local(drive_id: str, all_msgs: List[Msg], merged_msgs: List[Msg],
-                  media_files: list, skip_media: bool) -> None:
+                  media_files: List[dict], skip_media: bool) -> None:
     """
     Save messages and media to the filesystem.
     """
@@ -755,7 +757,7 @@ def main(creds_path: str, google_drive_url: str, local: bool,
         logging.info("Downloading %d media files...", len(media_files))
         for media_file in media_files:
             download_content_to_file(media_file, gdrive_service)
-        for media_files in media_files:
+        for media_file in media_files:
             set_media_hash(media_file)
         for media_msg in media_msgs:
             media_msg.process_media_msg()

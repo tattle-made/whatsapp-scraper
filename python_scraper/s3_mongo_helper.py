@@ -7,6 +7,7 @@ import sys
 
 # Helper functions to upload to Mongo and S3
 
+
 def initialize_s3():
     aws_access_key_id = os.environ.get("AWS_ACCESS_KEY_ID")
     aws_secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY_ID")
@@ -15,6 +16,7 @@ def initialize_s3():
     s3 = boto3.client("s3", aws_access_key_id=aws_access_key_id,
                       aws_secret_access_key=aws_secret_access_key)
     return aws, bucket, s3
+
 
 def initialize_mongo(var_prefix="SHARECHAT"):
     db_username = os.environ.get(f"{var_prefix}_DB_USERNAME")

@@ -14,6 +14,7 @@ import secrets
 import shutil
 from typing import List, Dict
 
+import boto3
 from dateutil import parser as dt_parser
 from googleapiclient.discovery import build, Resource
 from googleapiclient.http import MediaIoBaseDownload
@@ -21,8 +22,6 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from google.oauth2 import service_account
 from pymongo import MongoClient
-
-from s3_mongo_helper import initialize_s3, upload_to_s3
 
 # If modifying these scopes, delete the file token.pickle.
 SCOPES = ('https://www.googleapis.com/auth/drive.readonly',)
@@ -385,9 +384,27 @@ def initialize_mongo():
     mongo_url = f"mongodb+srv://{db_username}:{db_password}@tattle-data-fkpmg.mongodb.net/test?retryWrites=true&w=majority&ssl=true&ssl_cert_reqs=CERT_NONE"
     cli = MongoClient(mongo_url)
     db = cli[os.environ.get("WHATSAPP_DB_NAME")]
-    all_coll = db[os.environ.get("WHATSAPP_ALL_DB_COLLECTION")]
-    merged_coll = db[os.environ.get("WHATSAPP_MERGED_DB_COLLECTION")]
-    return all_coll, merged_coll
+    all_files_coll = db[os.environ.get("WHATSAPP_ALL_FILES_DB_COLLECTION")]
+    merged_msgs_coll = db[os.environ.get("WHATSAPP_MERGED_MSGS_DB_COLLECTION")]
+    return all_files_coll, merged_msgs_coll
+
+
+def initialize_s3():
+    aws_access_key_id = os.environ.get("AWS_ACCESS_KEY_ID")
+    aws_secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY_ID")
+    bucket = os.environ.get("AWS_BUCKET")
+    s3 = boto3.client("s3", aws_access_key_id=aws_access_key_id,
+                      aws_secret_access_key=aws_secret_access_key)
+    return bucket, s3
+
+
+def upload_to_s3(s3, file, filename, bucket, content_type):
+    with open(file, "rb")as data:
+        s3.upload_fileobj(Fileobj=data,
+                          Bucket=bucket,
+                          Key=filename,
+                          ExtraArgs={'ContentType': content_type,
+                                     'ACL': 'public-read'})
 
 
 def save_to_server(all_msgs: List[Msg], merged_msgs: List[Msg],
@@ -397,12 +414,10 @@ def save_to_server(all_msgs: List[Msg], merged_msgs: List[Msg],
     This requires setting environment variables
     """
 
-    # 0. Initialize
-    all_coll, merged_coll = initialize_mongo()
-    aws, bucket, s3 = initialize_s3()
+    # 0. Initialize mongo
+    all_files_coll, merged_msgs_coll = initialize_mongo()
 
     # 1. Insert all "raw" msgs
-    all_coll = initialize_mongo(var_prefix="whatsapp_all")
     msgs_by_file = group_by_file(all_msgs)
     to_insert = []
     insert_dt = datetime.datetime.utcnow().isoformat()
@@ -413,19 +428,19 @@ def save_to_server(all_msgs: List[Msg], merged_msgs: List[Msg],
             'source_loc': drive_id,
             'msgs': [m.as_dict() for m in msgs]
         })
-    all_coll.insert_many(to_insert)
+    all_files_coll.insert_many(to_insert)
 
     # 2. Upsert merged msgs
-    merged_coll = initialize_mongo(var_prefix="whatsapp_merged")
     msg_gids = [msg.group_id for msg in merged_msgs]
-    existing_msgs = merged_coll.find({"group_id": {"$in": msg_gids}})
+    existing_msgs = merged_msgs_coll.find({"group_id": {"$in": msg_gids}})
     if existing_msgs:
         logging.warning("Not overwriting %d msgs already in server.",
-                        len(existing_msgs))
+                        len(list(existing_msgs)))
         merge_msgs_from_server(merged_msgs, existing_msgs)
-    merged_coll.insert_many([m.as_dict() for m in merged_msgs])
+    merged_msgs_coll.insert_many([m.as_dict() for m in merged_msgs])
 
     # 3. Upload media files to s3
+    bucket, s3 = initialize_s3()
     for fl in media_files:
         logging.info("Uploading %r", fl['hash'])
         upload_to_s3(s3, fl['content'], fl['hash'], bucket, fl['media_mime_type'])
@@ -704,7 +719,7 @@ def main(creds_path: str, google_drive_url: str, local: bool,
                             "Anonymization will not be deterministic")
             SCRAPER_SALT = secrets.token_hex()
         else:
-            logging.warning("Set the SCRAPER_SALT env variable. ")
+            logging.error("Set the SCRAPER_SALT env variable. ")
             return
 
     # 1. Setup google drive

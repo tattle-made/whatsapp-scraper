@@ -75,11 +75,14 @@ class Msg():
         self.media_file = kwargs.pop('media_file', {})
         self.media_upload_loc = kwargs.pop('media_upload_loc', None)
         self.media_mime_type = kwargs.pop('media_mime_type', None)
+
+        # for mongo
+        kwargs.pop("_id", "")
         assert not kwargs
 
     def __repr__(self):
-        return "%s: %s %s: %s" % (self.order, self.dt, self.sender_id[:5],
-                                  self.content[:50].replace('\n', '\\n'))
+        return "<Msg %s: %s %s: %s>" % (self.order, self.dt, self.sender_id[:5],
+                                        self.content[:50].replace('\n', '\\n'))
 
     def __eq__(self, other):
         return (self.dt == other.dt
@@ -178,7 +181,7 @@ def content_sort(msg: Msg) -> tuple:
     return (msg.is_original(),
             msg.has_media,
             msg.media_upload_loc,
-            msg.media_file)
+            bool(msg.media_file))
 
 
 def get_gdrive_service(creds_path: str) -> Resource:
@@ -343,7 +346,7 @@ def filter_superfluous_media_files(media_files: list, media_msgs: list) -> list:
     return filtered_media_files
 
 
-def save_to_local(drive_id: str, all_msgs: List[Msg], merged_msgs: List[Msg],
+def save_to_local(drive_id: str, all_msgs: List[Msg], msgs_to_insert: List[Msg],
                   media_files: List[dict], skip_media: bool) -> None:
     """
     Save messages and media to the filesystem.
@@ -357,8 +360,8 @@ def save_to_local(drive_id: str, all_msgs: List[Msg], merged_msgs: List[Msg],
 
     fn = f"merged_scrape_{today}_{drive_id}.json"
     with open(fn, 'w') as f:
-        f.write(json.dumps([m.as_dict() for m in merged_msgs]))
-        logging.info("Wrote %d messages to %r", len(merged_msgs), fn)
+        f.write(json.dumps([m.as_dict() for m in msgs_to_insert]))
+        logging.info("Wrote %d messages to %r", len(msgs_to_insert), fn)
 
     if skip_media:
         return
@@ -407,7 +410,7 @@ def upload_to_s3(s3, file, filename, bucket, content_type):
                                      'ACL': 'public-read'})
 
 
-def save_to_server(all_msgs: List[Msg], merged_msgs: List[Msg],
+def save_to_remote(all_msgs: List[Msg], msgs_to_insert: List[Msg],
                    media_files: list, drive_id: str) -> None:
     """
     Save msgs and media to the Tattle server.
@@ -428,16 +431,24 @@ def save_to_server(all_msgs: List[Msg], merged_msgs: List[Msg],
             'source_loc': drive_id,
             'msgs': [m.as_dict() for m in msgs]
         })
+    logging.info("Writing %d processed files to %r",
+                 len(to_insert), all_files_coll.name)
     all_files_coll.insert_many(to_insert)
 
     # 2. Upsert merged msgs
-    msg_gids = [msg.group_id for msg in merged_msgs]
-    existing_msgs = merged_msgs_coll.find({"group_id": {"$in": msg_gids}})
+    msg_gids = [msg.group_id for msg in msgs_to_insert]
+    logging.info("Looking for existing messages on MongoDB in same groups...")
+    existing_msgs = list(merged_msgs_coll.find({"group_id": {"$in": msg_gids}}))
     if existing_msgs:
-        logging.warning("Not overwriting %d msgs already in server.",
-                        len(list(existing_msgs)))
-        merge_msgs_from_server(merged_msgs, existing_msgs)
-    merged_msgs_coll.insert_many([m.as_dict() for m in merged_msgs])
+        logging.warning("Not overwriting %d msgs already on MongoDB.",
+                        len(existing_msgs))
+        msgs_to_insert = merge_msgs_from_server(msgs_to_insert, existing_msgs)
+    if msgs_to_insert:
+        logging.info("Writing %d new messages to %r",
+                     len(msgs_to_insert), merged_msgs_coll.name)
+        merged_msgs_coll.insert_many([m.as_dict() for m in msgs_to_insert])
+    else:
+        logging.info("No new messages to insert.")
 
     # 3. Upload media files to s3
     bucket, s3 = initialize_s3()
@@ -460,16 +471,20 @@ def group_msgs(msgs: List[Msg]) -> Dict[str, List[Msg]]:
     return dict(msgs_by_group)
 
 
-def merge_msgs_from_server(msgs: List[Msg],
-                           existing_msgs: List[dict]) -> None:
+def merge_msgs_from_server(new_msgs: List[Msg],
+                           existing_msgs: List[dict]) -> List[dict]:
     """
     Whatsapp has a 10k message limit per group. It's likely therefore that
     we will get overlapping messages and the order on the new message will be
-    wrong. This detects the overlap and updates the original msgs order
+    wrong.
+
+    This does two things:
+    1. Detects the overlap and updates the original msgs order
+    2. Removes the old messages from the messages to insert
     """
     existing_msgs = [Msg.from_dict(m) for m in existing_msgs]
     existing_msgs_by_group = group_msgs(existing_msgs)
-    msgs_by_group = group_msgs(msgs)
+    msgs_by_group = group_msgs(new_msgs)
 
     for group_key, msgs_in_new_group in msgs_by_group.items():
         msgs_in_old_group = existing_msgs_by_group.get(group_key)
@@ -485,6 +500,11 @@ def merge_msgs_from_server(msgs: List[Msg],
         # limit them and write the new messages
         msgs_not_on_mongo = merged_msgs[len(msgs_in_old_group):]
         msgs_by_group[group_key] = msgs_not_on_mongo
+
+    ret = []
+    for msgs in msgs_by_group.values():
+        ret += msgs
+    return ret
 
 
 def msg_sort(msg: Msg) -> tuple:
@@ -538,6 +558,8 @@ def check_match(msgs_a: List[Msg], msgs_b: List[Msg], offset: int):
     matches = 0
     for i in range(-1 * offset, len(msgs_a) + len(msgs_b)):
         try:
+            if i + offset < 0:
+                continue
             msg_a = msgs_a[i + offset]
         except IndexError:
             continue
@@ -596,7 +618,8 @@ def find_offset(msg_set_a: List[Msg], msg_set_b: List[Msg]) -> int:
     if possible_matches:
         return max(possible_matches.keys(),
                    key=lambda o: possible_matches[o])
-    raise AssertionError("Files do not overlap")
+    print('\a'); import ipdb; ipdb.set_trace()
+    raise AssertionError("The two sets of messages do not overlap")
 
 
 def merge_two_msg_lists(msgs_a: List[Msg], msgs_b: List[Msg]) -> List[Msg]:
@@ -604,6 +627,10 @@ def merge_two_msg_lists(msgs_a: List[Msg], msgs_b: List[Msg]) -> List[Msg]:
     Given two groups of messages, which are from the same group, merge into one
     list of messages
     """
+
+    # Basic check. We can't merge if the orders within each list are not consistent
+    assert len(set(m.order for m in msgs_a)) == len(msgs_a)
+    assert len(set(m.order for m in msgs_b)) == len(msgs_b)
 
     # The code ahead assumes msgs_a is always < msgs_b. If they aren't, swap them
     if msgs_a[0].dt > msgs_b[0].dt:
@@ -654,12 +681,12 @@ def merge_msgs_in_group(group_id: str, msgs_in_grp: list) -> list:
 
     # 2. Return if only one file came in
     if num_files == 1:
-        logging.info("No need to merge %s", group_id)
+        logging.info("Only one file in group %r. No need to merge.", group_id)
         assert set(m.order for m in msgs_in_grp) == set(range(len(msgs_in_grp)))
         return msgs_in_grp
 
     # 3. Iteratively merge different files
-    logging.info("Merging %d files from %s...", num_files, group_id)
+    logging.info("Merging %d files from group %r...", num_files, group_id)
     ret = msgs_by_file.pop()
     while msgs_by_file:
         other_msgs = msgs_by_file.pop()
@@ -674,7 +701,8 @@ def merge_msgs_in_group(group_id: str, msgs_in_grp: list) -> list:
 
     assert set(m.order for m in ret) == set(range(len(ret)))
 
-    logging.info("Merged %d files [min:%d avg:%d max:%d] to %d messages",
+    logging.info("Merged %d files [min_num_msgs:%d avg_num_msgs:%d "
+                 "max_num_msgs:%d] to %d messages",
                  num_files,
                  min_msgs_by_file,
                  avg_msgs_by_file,
@@ -768,13 +796,13 @@ def main(creds_path: str, google_drive_url: str, local: bool,
             media_msg.process_media_msg()
 
     # 6. Merge messages from identical files together
-    merged_msgs = merge_all_msgs(msgs)
+    msgs_to_insert = merge_all_msgs(msgs)
 
     # 7. Save
     if local:
-        save_to_local(drive_id, msgs, merged_msgs, media_files, skip_media)
+        save_to_local(drive_id, msgs, msgs_to_insert, media_files, skip_media)
         return
-    save_to_server(msgs, merged_msgs, media_files, drive_id)
+    save_to_remote(msgs, msgs_to_insert, media_files, drive_id)
 
 
 if __name__ == '__main__':

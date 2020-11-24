@@ -420,20 +420,34 @@ def save_to_remote(all_msgs: List[Msg], msgs_to_insert: List[Msg],
     # 0. Initialize mongo
     all_files_coll, merged_msgs_coll = initialize_mongo()
 
-    # 1. Insert all "raw" msgs
+    # 1. Insert all files processed
     msgs_by_file = group_by_file(all_msgs)
-    to_insert = []
+    files_to_insert = []
     insert_dt = datetime.datetime.utcnow().isoformat()
     for msgs in msgs_by_file.values():
-        to_insert.append({
+        add_msgs = [m.as_dict() for m in msgs]
+        files_to_insert.append({
             'scrape_datetime': insert_dt,
             'source': GOOGLE_DRIVE,
             'source_loc': drive_id,
-            'msgs': [m.as_dict() for m in msgs]
+            'msgs': add_msgs,
+            'msgs_hash': encrypt_string(json.dumps(add_msgs))
         })
-    logging.info("Writing %d processed files to %r",
-                 len(to_insert), all_files_coll.name)
-    all_files_coll.insert_many(to_insert)
+    msg_hashes = [f['msgs_hash'] for f in files_to_insert]
+    logging.info("Looking for existing files on MongoDB with same messages...")
+    existing_files = list(all_files_coll.find(
+        {"msgs_hash": {"$in": msg_hashes}},
+        projection={'_id': False, 'msgs_hash': True}))
+    existing_msg_hashes = [f['msgs_hash'] for f in existing_files]
+    new_files_to_insert = [f for f in files_to_insert
+                           if f['msgs_hash'] not in existing_msg_hashes]
+    if len(new_files_to_insert):
+        logging.info("Writing %d new files to %r (skipped %d already existing)",
+                     len(new_files_to_insert), all_files_coll.name,
+                     len(files_to_insert) - len(new_files_to_insert))
+        all_files_coll.insert_many(new_files_to_insert)
+    else:
+        logging.info("No new files to insert.")
 
     # 2. Upsert merged msgs
     msg_gids = [msg.group_id for msg in msgs_to_insert]
@@ -452,9 +466,9 @@ def save_to_remote(all_msgs: List[Msg], msgs_to_insert: List[Msg],
 
     # 3. Upload media files to s3
     bucket, s3 = initialize_s3()
-    for fl in media_files:
-        logging.info("Uploading %r", fl['hash'])
-        upload_to_s3(s3, fl['content'], fl['hash'], bucket, fl['media_mime_type'])
+    for f in media_files:
+        logging.info("Uploading %r", f['hash'])
+        upload_to_s3(s3, f['content'], f['hash'], bucket, f['media_mime_type'])
     logging.info("Wrote %d files to S3. Done", len(media_files))
 
 
@@ -618,7 +632,6 @@ def find_offset(msg_set_a: List[Msg], msg_set_b: List[Msg]) -> int:
     if possible_matches:
         return max(possible_matches.keys(),
                    key=lambda o: possible_matches[o])
-    print('\a'); import ipdb; ipdb.set_trace()
     raise AssertionError("The two sets of messages do not overlap")
 
 

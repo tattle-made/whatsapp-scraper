@@ -63,7 +63,7 @@ class Msg():
     def __init__(self, **kwargs):
         self.dt = kwargs.pop('dt', None)
         if not self.dt and 'datetime' in kwargs:
-            self.dt = datetime.datetime.fromisoformat(kwargs['datetime'])
+            self.dt = datetime.datetime.fromisoformat(kwargs.pop('datetime'))
         self.has_media = kwargs.pop('has_media', False)
         self.sender_id = kwargs.pop('sender_id', "")
         self.group_id = kwargs.pop('group_id', "")
@@ -117,19 +117,9 @@ class Msg():
             'media_mime_type': self.media_mime_type,
         }
 
-    def from_dict(self, dict):
-        return {
-            'datetime': self.dt.isoformat(),
-            'source_type': self.source_type,
-            'source_loc': self.source_loc,
-            'sender_id': self.sender_id,
-            'group_id': self.group_id,
-            'content': self.content,
-            'order': self.order,
-            'has_media': self.has_media,
-            'media_upload_loc': self.media_upload_loc,
-            'media_mime_type': self.media_mime_type,
-        }
+    @staticmethod
+    def from_dict(d):
+        return Msg(**d)
 
     def is_original(self):
         return self.content not in SKIP_MSGS
@@ -769,7 +759,7 @@ def main(creds_path: str, google_drive_url: str, local: bool,
     if local:
         save_to_local(drive_id, msgs, merged_msgs, media_files, skip_media)
         return
-    save_to_server(msgs, merged_msgs, media_files)
+    save_to_server(msgs, merged_msgs, media_files, drive_id)
 
 
 if __name__ == '__main__':

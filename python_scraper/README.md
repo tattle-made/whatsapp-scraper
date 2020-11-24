@@ -4,7 +4,7 @@ Use this to convert WhatsApp dumps into structured data. This script will either
 
 ### Basic usage
 
-    ./whatapp_scaper.py path/to/creds.json drive.google.com/folders/drive_id --local --verbose
+    ./whatsapp_scraper.py path/to/creds.json drive.google.com/folders/drive_id --local --verbose
 
 For help on the CLI arguments, try `./whatsapp_scaper.py --help`
 

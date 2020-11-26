@@ -9,5 +9,5 @@ WHATSAPP_ALL_FILES_DB_COLLECTION=<the collection where all processed files will 
 WHATSAPP_MERGED_MSGS_DB_COLLECTION=<the collection where msgs go. Consider this the primary collection>
 
 AWS_ACCESS_KEY_ID=<your aws access key id>
-AWS_SECRET_ACCESS_KEY_ID=<your aws secret access key id>
-AWS_BUCKET=<bucket where your media files will go>
+AWS_SECRET_ACCESS_KEY=<your aws secret access key id>
+AWS_BUCKET=<aws bucket name (skip the ARN)>

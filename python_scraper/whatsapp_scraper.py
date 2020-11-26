@@ -25,7 +25,6 @@ from pymongo import MongoClient
 
 # If modifying these scopes, delete the file token.pickle.
 SCOPES = ('https://www.googleapis.com/auth/drive.readonly',)
-SCRAPER_SALT = os.environ.get('SCRAPER_SALT', '')
 MSG_DELETED = "This message was deleted"
 MEDIA_OMITTED = "<Media omitted>"
 SKIP_MSGS = (MSG_DELETED, MEDIA_OMITTED)
@@ -33,9 +32,20 @@ ACTION_HEADER = re.compile(r"(?P<day>[0-9]+/[0-9]+/[0-9]+), (?P<tm>[0-9]+:[0-9]+
 MESSAGE_HEADER = re.compile(r"(?P<day>[0-9]+/[0-9]+/[0-9]+), (?P<tm>[0-9]+:[0-9]+ (am|pm)) - (?P<pn>\+?[0-9 ]+): (?P<tail>.*?)$")
 FILE_ATTACHED_RE = re.compile(r"(?P<fn>.*?) \(file attached\)")
 GDRIVE_RE = re.compile(r"(?:https://|)drive\.google\.com/.*?/folders/(?P<drive_id>[a-zA-Z0-9_-]+)")
+AWS_BUCKET_RE = re.compile(r"^[a-zA-Z0-9.\-_]{1,255}$")
 DAY_FMT = "%d/%m/%y"
 MINUTES = datetime.timedelta(seconds=60)
 GOOGLE_DRIVE = "GOOGLE_DRIVE"
+REQ_WHATSAPP_ENV_VARS = (
+    'WHATSAPP_DB_USERNAME',
+    'WHATSAPP_DB_PASSWORD',
+    'WHATSAPP_DB_NAME',
+    'WHATSAPP_ALL_FILES_DB_COLLECTION',
+    'WHATSAPP_MERGED_MSGS_DB_COLLECTION')
+REQ_AWS_ENV_VARS = (
+    'AWS_ACCESS_KEY_ID',
+    'AWS_SECRET_ACCESS_KEY',
+    'AWS_BUCKET')
 
 # Silence unneccesary google api warnings
 # https://github.com/googleapis/google-api-python-client/issues/299
@@ -180,7 +190,7 @@ def content_sort(msg: Msg) -> tuple:
     """
     return (msg.is_original(),
             msg.has_media,
-            msg.media_upload_loc,
+            bool(msg.media_upload_loc),
             bool(msg.media_file))
 
 
@@ -283,7 +293,7 @@ def encrypt_string(string: str, salt2="") -> str:
     """
     Returns an encrypted string for anonymization of groups and phones
     """
-    salt = SCRAPER_SALT + salt2
+    salt = os.environ['SCRAPER_SALT'] + salt2
     return hashlib.pbkdf2_hmac('sha256', string.encode(),
                                salt.encode(), 1).hex()
 
@@ -382,32 +392,30 @@ def save_to_local(drive_id: str, all_msgs: List[Msg], msgs_to_insert: List[Msg],
 
 
 def initialize_mongo():
-    db_username = os.environ.get("WHATSAPP_DB_USERNAME")
-    db_password = os.environ.get("WHATSAPP_DB_PASSWORD")
+    db_username = os.environ["WHATSAPP_DB_USERNAME"]
+    db_password = os.environ["WHATSAPP_DB_PASSWORD"]
     mongo_url = f"mongodb+srv://{db_username}:{db_password}@tattle-data-fkpmg.mongodb.net/test?retryWrites=true&w=majority&ssl=true&ssl_cert_reqs=CERT_NONE"
     cli = MongoClient(mongo_url)
-    db = cli[os.environ.get("WHATSAPP_DB_NAME")]
-    all_files_coll = db[os.environ.get("WHATSAPP_ALL_FILES_DB_COLLECTION")]
-    merged_msgs_coll = db[os.environ.get("WHATSAPP_MERGED_MSGS_DB_COLLECTION")]
+    db = cli[os.environ["WHATSAPP_DB_NAME"]]
+    all_files_coll = db[os.environ["WHATSAPP_ALL_FILES_DB_COLLECTION"]]
+    merged_msgs_coll = db[os.environ["WHATSAPP_MERGED_MSGS_DB_COLLECTION"]]
     return all_files_coll, merged_msgs_coll
 
 
 def initialize_s3():
-    aws_access_key_id = os.environ.get("AWS_ACCESS_KEY_ID")
-    aws_secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY_ID")
-    bucket = os.environ.get("AWS_BUCKET")
+    aws_access_key_id = os.environ["AWS_ACCESS_KEY_ID"]
+    aws_secret_access_key = os.environ["AWS_SECRET_ACCESS_KEY"]
+    bucket = os.environ["AWS_BUCKET"]
     s3 = boto3.client("s3", aws_access_key_id=aws_access_key_id,
                       aws_secret_access_key=aws_secret_access_key)
     return bucket, s3
 
 
-def upload_to_s3(s3, file, filename, bucket, content_type):
-    with open(file, "rb")as data:
-        s3.upload_fileobj(Fileobj=data,
-                          Bucket=bucket,
-                          Key=filename,
-                          ExtraArgs={'ContentType': content_type,
-                                     'ACL': 'public-read'})
+def upload_to_s3(s3, file_to_upload, s3_filename, bucket, content_type):
+    s3.upload_fileobj(Fileobj=file_to_upload,
+                      Bucket=bucket,
+                      Key=s3_filename,
+                      ExtraArgs={'ContentType': content_type})
 
 
 def save_to_remote(all_msgs: List[Msg], msgs_to_insert: List[Msg],
@@ -466,9 +474,9 @@ def save_to_remote(all_msgs: List[Msg], msgs_to_insert: List[Msg],
 
     # 3. Upload media files to s3
     bucket, s3 = initialize_s3()
-    for f in media_files:
-        logging.info("Uploading %r", f['hash'])
-        upload_to_s3(s3, f['content'], f['hash'], bucket, f['media_mime_type'])
+    for mf in media_files:
+        logging.info("Uploading %r (%s)", mf['hash'], mf['mimeType'])
+        upload_to_s3(s3, mf['content'], mf['hash'], bucket, mf['mimeType'])
     logging.info("Wrote %d files to S3. Done", len(media_files))
 
 
@@ -745,6 +753,36 @@ def set_media_hash(media_file: dict) -> None:
     media_file['content'].seek(0)
 
 
+def validate_env_vars(local: bool, skip_media: bool,
+                      salt_not_required: bool) -> bool:
+    """
+    Validate that the necessary environmental variables are set before running
+    """
+    if 'SCRAPER_SALT' not in os.environ:
+        if salt_not_required:
+            logging.warning("The SCRAPER_SALT env is not set. "
+                            "Anonymization will not be deterministic")
+            os.environ['SCRAPER_SALT'] = secrets.token_hex()
+        else:
+            logging.error("Set the SCRAPER_SALT env variable. "
+                          "Did you `source .env`?")
+            return False
+    if not local:
+        if not all(v in os.environ for v in REQ_WHATSAPP_ENV_VARS):
+            logging.error("Missing one or more WhatsApp env variables. "
+                          "Did you `source .env`?")
+            return False
+    if not skip_media and not local:
+        if not all(v in os.environ for v in REQ_AWS_ENV_VARS):
+            logging.error("Missing one or more AWS env variables. "
+                          "Did you `source .env`?")
+            return False
+        if not AWS_BUCKET_RE.match(os.environ['AWS_BUCKET']):
+            logging.error("AWS bucket name did not match regex")
+            return False
+    return True
+
+
 def main(creds_path: str, google_drive_url: str, local: bool,
          skip_media: bool, salt_not_required: bool) -> None:
     """
@@ -752,16 +790,9 @@ def main(creds_path: str, google_drive_url: str, local: bool,
     and save messages and media.
     """
 
-    # 0. Validate salt
-    global SCRAPER_SALT
-    if not SCRAPER_SALT:
-        if salt_not_required:
-            logging.warning("The SCRAPER_SALT env is not set. "
-                            "Anonymization will not be deterministic")
-            SCRAPER_SALT = secrets.token_hex()
-        else:
-            logging.error("Set the SCRAPER_SALT env variable. ")
-            return
+    # 0. Validate env
+    if not validate_env_vars(local, skip_media, salt_not_required):
+        return
 
     # 1. Setup google drive
     drive_url_match = GDRIVE_RE.match(google_drive_url)

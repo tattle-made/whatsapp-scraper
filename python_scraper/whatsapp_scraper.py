@@ -28,8 +28,8 @@ SCOPES = ('https://www.googleapis.com/auth/drive.readonly',)
 MSG_DELETED = "This message was deleted"
 MEDIA_OMITTED = "<Media omitted>"
 SKIP_MSGS = (MSG_DELETED, MEDIA_OMITTED)
-ACTION_HEADER = re.compile(r"(?P<day>[0-9]+/[0-9]+/[0-9]+), (?P<tm>[0-9]+:[0-9]+ (am|pm)) - (?P<pn>\+?[0-9 ]+) .*?$")
-MESSAGE_HEADER = re.compile(r"(?P<day>[0-9]+/[0-9]+/[0-9]+), (?P<tm>[0-9]+:[0-9]+ (am|pm)) - (?P<pn>\+?[0-9 ]+): (?P<tail>.*?)$")
+ACTION_LINE = re.compile(r"(?P<day>[0-9]+/[0-9]+/[0-9]+), (?P<tm>[0-9]+:[0-9]+ (am|pm)) - (?P<tail>[^:]+)$", re.IGNORECASE)
+MSG_LINE = re.compile(r"(?P<day>[0-9]+/[0-9]+/[0-9]+), (?P<tm>[0-9]+:[0-9]+ (am|pm)) - (?P<sn>[^:]+): (?P<tail>.*?)$", re.IGNORECASE)
 FILE_ATTACHED_RE = re.compile(r"(?P<fn>.*?) \(file attached\)")
 GDRIVE_RE = re.compile(r"(?:https://|)drive\.google\.com/.*?/folders/(?P<drive_id>[a-zA-Z0-9_-]+)")
 AWS_BUCKET_RE = re.compile(r"^[a-zA-Z0-9.\-_]{1,255}$")
@@ -108,7 +108,7 @@ class Msg():
         tm = dt_parser.parse(tm_raw).time()
         return Msg(
             dt=datetime.datetime.combine(day, tm),
-            sender_id=encrypt_string(match['pn'].strip(), group_id),
+            sender_id=encrypt_string(match['sn'].strip(), group_id),
             group_id=group_id,
             source_loc=source_loc,
             content=match['tail'],
@@ -311,13 +311,15 @@ def process_text_file(text_file: dict, media_files_by_name: dict,
     content_lines = text_file['content'].read().decode().split('\n')
     current_msg = None
     for content_line in content_lines:
-        if ACTION_HEADER.match(content_line):
+        if ACTION_LINE.match(content_line):
             # action header is a subset of message header but if we get it,
             # it means the message is over and we should save the message
             if current_msg:
                 msgs.append(current_msg)
                 current_msg = None
-        if msg_match := MESSAGE_HEADER.match(content_line):
+        if msg_match := MSG_LINE.match(content_line):
+            if current_msg:
+                msgs.append(current_msg)
             current_msg = Msg.create(msg_match, group_id, file_idx, source_loc)
             continue
         if current_msg:

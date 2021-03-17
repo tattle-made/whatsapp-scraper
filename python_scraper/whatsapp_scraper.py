@@ -307,6 +307,7 @@ def process_text_file(text_file: dict, media_files_by_name: dict,
 
     # 1. Build up the messages line-by-line
     group_id = encrypt_string(text_file['name'])
+    print("pair", text_file['name'], group_id)
     msgs = []
     content_lines = text_file['content'].read().decode().split('\n')
     current_msg = None
@@ -679,7 +680,10 @@ def group_by_file(msgs: List[Msg]) -> Dict[int, List[Msg]]:
     msgs_by_file = collections.defaultdict(list)
     for msg in msgs:
         msgs_by_file[msg.file_idx].append(msg)
-    return dict(msgs_by_file)
+
+    msgs_by_file = {file_idx: msgs for file_idx, msgs
+                    in sorted(msgs_by_file.items(), key=lambda tup: tup[1][-1].dt)}
+    return msgs_by_file
 
 
 def merge_msgs_in_group(group_id: str, msgs_in_grp: list) -> list:

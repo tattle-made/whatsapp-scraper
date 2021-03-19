@@ -14,6 +14,7 @@ import secrets
 import shutil
 from typing import List, Dict
 
+import boto3
 from dateutil import parser as dt_parser
 from googleapiclient.discovery import build, Resource
 from googleapiclient.http import MediaIoBaseDownload
@@ -22,21 +23,29 @@ from google.auth.transport.requests import Request
 from google.oauth2 import service_account
 from pymongo import MongoClient
 
-from s3_mongo_helper import initialize_s3, upload_to_s3
-
 # If modifying these scopes, delete the file token.pickle.
 SCOPES = ('https://www.googleapis.com/auth/drive.readonly',)
-SCRAPER_SALT = os.environ.get('SCRAPER_SALT', '')
 MSG_DELETED = "This message was deleted"
 MEDIA_OMITTED = "<Media omitted>"
 SKIP_MSGS = (MSG_DELETED, MEDIA_OMITTED)
-ACTION_HEADER = re.compile(r"(?P<day>[0-9]+/[0-9]+/[0-9]+), (?P<tm>[0-9]+:[0-9]+ (am|pm)) - (?P<pn>\+?[0-9 ]+) .*?$")
-MESSAGE_HEADER = re.compile(r"(?P<day>[0-9]+/[0-9]+/[0-9]+), (?P<tm>[0-9]+:[0-9]+ (am|pm)) - (?P<pn>\+?[0-9 ]+): (?P<tail>.*?)$")
+ACTION_LINE = re.compile(r"(?P<day>[0-9]+/[0-9]+/[0-9]+), (?P<tm>[0-9]+:[0-9]+ (am|pm)) - (?P<tail>[^:]+)$", re.IGNORECASE)
+MSG_LINE = re.compile(r"(?P<day>[0-9]+/[0-9]+/[0-9]+), (?P<tm>[0-9]+:[0-9]+ (am|pm)) - (?P<sn>[^:]+): (?P<tail>.*?)$", re.IGNORECASE)
 FILE_ATTACHED_RE = re.compile(r"(?P<fn>.*?) \(file attached\)")
 GDRIVE_RE = re.compile(r"(?:https://|)drive\.google\.com/.*?/folders/(?P<drive_id>[a-zA-Z0-9_-]+)")
+AWS_BUCKET_RE = re.compile(r"^[a-zA-Z0-9.\-_]{1,255}$")
 DAY_FMT = "%d/%m/%y"
 MINUTES = datetime.timedelta(seconds=60)
 GOOGLE_DRIVE = "GOOGLE_DRIVE"
+REQ_WHATSAPP_ENV_VARS = (
+    'WHATSAPP_DB_USERNAME',
+    'WHATSAPP_DB_PASSWORD',
+    'WHATSAPP_DB_NAME',
+    'WHATSAPP_ALL_FILES_DB_COLLECTION',
+    'WHATSAPP_MERGED_MSGS_DB_COLLECTION')
+REQ_AWS_ENV_VARS = (
+    'AWS_ACCESS_KEY_ID',
+    'AWS_SECRET_ACCESS_KEY',
+    'AWS_BUCKET')
 
 # Silence unneccesary google api warnings
 # https://github.com/googleapis/google-api-python-client/issues/299
@@ -63,7 +72,7 @@ class Msg():
     def __init__(self, **kwargs):
         self.dt = kwargs.pop('dt', None)
         if not self.dt and 'datetime' in kwargs:
-            self.dt = datetime.datetime.fromisoformat(kwargs['datetime'])
+            self.dt = datetime.datetime.fromisoformat(kwargs.pop('datetime'))
         self.has_media = kwargs.pop('has_media', False)
         self.sender_id = kwargs.pop('sender_id', "")
         self.group_id = kwargs.pop('group_id', "")
@@ -76,11 +85,14 @@ class Msg():
         self.media_file = kwargs.pop('media_file', {})
         self.media_upload_loc = kwargs.pop('media_upload_loc', None)
         self.media_mime_type = kwargs.pop('media_mime_type', None)
+
+        # for mongo
+        kwargs.pop("_id", "")
         assert not kwargs
 
     def __repr__(self):
-        return "%s: %s %s: %s" % (self.order, self.dt, self.sender_id[:5],
-                                  self.content[:50].replace('\n', '\\n'))
+        return "<Msg %s: %s %s: %s>" % (self.order, self.dt, self.sender_id[:5],
+                                        self.content[:50].replace('\n', '\\n'))
 
     def __eq__(self, other):
         return (self.dt == other.dt
@@ -96,7 +108,7 @@ class Msg():
         tm = dt_parser.parse(tm_raw).time()
         return Msg(
             dt=datetime.datetime.combine(day, tm),
-            sender_id=encrypt_string(match['pn'].strip(), group_id),
+            sender_id=encrypt_string(match['sn'].strip(), group_id),
             group_id=group_id,
             source_loc=source_loc,
             content=match['tail'],
@@ -117,19 +129,9 @@ class Msg():
             'media_mime_type': self.media_mime_type,
         }
 
-    def from_dict(self, dict):
-        return {
-            'datetime': self.dt.isoformat(),
-            'source_type': self.source_type,
-            'source_loc': self.source_loc,
-            'sender_id': self.sender_id,
-            'group_id': self.group_id,
-            'content': self.content,
-            'order': self.order,
-            'has_media': self.has_media,
-            'media_upload_loc': self.media_upload_loc,
-            'media_mime_type': self.media_mime_type,
-        }
+    @staticmethod
+    def from_dict(d):
+        return Msg(**d)
 
     def is_original(self):
         return self.content not in SKIP_MSGS
@@ -188,8 +190,8 @@ def content_sort(msg: Msg) -> tuple:
     """
     return (msg.is_original(),
             msg.has_media,
-            msg.media_upload_loc,
-            msg.media_file)
+            bool(msg.media_upload_loc),
+            bool(msg.media_file))
 
 
 def get_gdrive_service(creds_path: str) -> Resource:
@@ -291,7 +293,7 @@ def encrypt_string(string: str, salt2="") -> str:
     """
     Returns an encrypted string for anonymization of groups and phones
     """
-    salt = SCRAPER_SALT + salt2
+    salt = os.environ['SCRAPER_SALT'] + salt2
     return hashlib.pbkdf2_hmac('sha256', string.encode(),
                                salt.encode(), 1).hex()
 
@@ -305,17 +307,20 @@ def process_text_file(text_file: dict, media_files_by_name: dict,
 
     # 1. Build up the messages line-by-line
     group_id = encrypt_string(text_file['name'])
+    print("pair", text_file['name'], group_id)
     msgs = []
     content_lines = text_file['content'].read().decode().split('\n')
     current_msg = None
     for content_line in content_lines:
-        if ACTION_HEADER.match(content_line):
+        if ACTION_LINE.match(content_line):
             # action header is a subset of message header but if we get it,
             # it means the message is over and we should save the message
             if current_msg:
                 msgs.append(current_msg)
                 current_msg = None
-        if msg_match := MESSAGE_HEADER.match(content_line):
+        if msg_match := MSG_LINE.match(content_line):
+            if current_msg:
+                msgs.append(current_msg)
             current_msg = Msg.create(msg_match, group_id, file_idx, source_loc)
             continue
         if current_msg:
@@ -354,7 +359,7 @@ def filter_superfluous_media_files(media_files: list, media_msgs: list) -> list:
     return filtered_media_files
 
 
-def save_to_local(drive_id: str, all_msgs: List[Msg], merged_msgs: List[Msg],
+def save_to_local(drive_id: str, all_msgs: List[Msg], msgs_to_insert: List[Msg],
                   media_files: List[dict], skip_media: bool) -> None:
     """
     Save messages and media to the filesystem.
@@ -368,8 +373,8 @@ def save_to_local(drive_id: str, all_msgs: List[Msg], merged_msgs: List[Msg],
 
     fn = f"merged_scrape_{today}_{drive_id}.json"
     with open(fn, 'w') as f:
-        f.write(json.dumps([m.as_dict() for m in merged_msgs]))
-        logging.info("Wrote %d messages to %r", len(merged_msgs), fn)
+        f.write(json.dumps([m.as_dict() for m in msgs_to_insert]))
+        logging.info("Wrote %d messages to %r", len(msgs_to_insert), fn)
 
     if skip_media:
         return
@@ -390,55 +395,91 @@ def save_to_local(drive_id: str, all_msgs: List[Msg], merged_msgs: List[Msg],
 
 
 def initialize_mongo():
-    db_username = os.environ.get("WHATSAPP_DB_USERNAME")
-    db_password = os.environ.get("WHATSAPP_DB_PASSWORD")
+    db_username = os.environ["WHATSAPP_DB_USERNAME"]
+    db_password = os.environ["WHATSAPP_DB_PASSWORD"]
     mongo_url = f"mongodb+srv://{db_username}:{db_password}@tattle-data-fkpmg.mongodb.net/test?retryWrites=true&w=majority&ssl=true&ssl_cert_reqs=CERT_NONE"
     cli = MongoClient(mongo_url)
-    db = cli[os.environ.get("WHATSAPP_DB_NAME")]
-    all_coll = db[os.environ.get("WHATSAPP_ALL_DB_COLLECTION")]
-    merged_coll = db[os.environ.get("WHATSAPP_MERGED_DB_COLLECTION")]
-    return all_coll, merged_coll
+    db = cli[os.environ["WHATSAPP_DB_NAME"]]
+    all_files_coll = db[os.environ["WHATSAPP_ALL_FILES_DB_COLLECTION"]]
+    merged_msgs_coll = db[os.environ["WHATSAPP_MERGED_MSGS_DB_COLLECTION"]]
+    return all_files_coll, merged_msgs_coll
 
 
-def save_to_server(all_msgs: List[Msg], merged_msgs: List[Msg],
+def initialize_s3():
+    aws_access_key_id = os.environ["AWS_ACCESS_KEY_ID"]
+    aws_secret_access_key = os.environ["AWS_SECRET_ACCESS_KEY"]
+    bucket = os.environ["AWS_BUCKET"]
+    s3 = boto3.client("s3", aws_access_key_id=aws_access_key_id,
+                      aws_secret_access_key=aws_secret_access_key)
+    return bucket, s3
+
+
+def upload_to_s3(s3, file_to_upload, s3_filename, bucket, content_type):
+    s3.upload_fileobj(Fileobj=file_to_upload,
+                      Bucket=bucket,
+                      Key=s3_filename,
+                      ExtraArgs={'ContentType': content_type})
+
+
+def save_to_remote(all_msgs: List[Msg], msgs_to_insert: List[Msg],
                    media_files: list, drive_id: str) -> None:
     """
     Save msgs and media to the Tattle server.
     This requires setting environment variables
     """
 
-    # 0. Initialize
-    all_coll, merged_coll = initialize_mongo()
-    aws, bucket, s3 = initialize_s3()
+    # 0. Initialize mongo
+    all_files_coll, merged_msgs_coll = initialize_mongo()
 
-    # 1. Insert all "raw" msgs
-    all_coll = initialize_mongo(var_prefix="whatsapp_all")
+    # 1. Insert all files processed
     msgs_by_file = group_by_file(all_msgs)
-    to_insert = []
+    files_to_insert = []
     insert_dt = datetime.datetime.utcnow().isoformat()
     for msgs in msgs_by_file.values():
-        to_insert.append({
+        add_msgs = [m.as_dict() for m in msgs]
+        files_to_insert.append({
             'scrape_datetime': insert_dt,
             'source': GOOGLE_DRIVE,
             'source_loc': drive_id,
-            'msgs': [m.as_dict() for m in msgs]
+            'msgs': add_msgs,
+            'msgs_hash': encrypt_string(json.dumps(add_msgs))
         })
-    all_coll.insert_many(to_insert)
+    msg_hashes = [f['msgs_hash'] for f in files_to_insert]
+    logging.info("Looking for existing files on MongoDB with same messages...")
+    existing_files = list(all_files_coll.find(
+        {"msgs_hash": {"$in": msg_hashes}},
+        projection={'_id': False, 'msgs_hash': True}))
+    existing_msg_hashes = [f['msgs_hash'] for f in existing_files]
+    new_files_to_insert = [f for f in files_to_insert
+                           if f['msgs_hash'] not in existing_msg_hashes]
+    if len(new_files_to_insert):
+        logging.info("Writing %d new files to %r (skipped %d already existing)",
+                     len(new_files_to_insert), all_files_coll.name,
+                     len(files_to_insert) - len(new_files_to_insert))
+        all_files_coll.insert_many(new_files_to_insert)
+    else:
+        logging.info("No new files to insert.")
 
     # 2. Upsert merged msgs
-    merged_coll = initialize_mongo(var_prefix="whatsapp_merged")
-    msg_gids = [msg.group_id for msg in merged_msgs]
-    existing_msgs = merged_coll.find({"group_id": {"$in": msg_gids}})
+    msg_gids = [msg.group_id for msg in msgs_to_insert]
+    logging.info("Looking for existing messages on MongoDB in same groups...")
+    existing_msgs = list(merged_msgs_coll.find({"group_id": {"$in": msg_gids}}))
     if existing_msgs:
-        logging.warning("Not overwriting %d msgs already in server.",
+        logging.warning("Not overwriting %d msgs already on MongoDB.",
                         len(existing_msgs))
-        merge_msgs_from_server(merged_msgs, existing_msgs)
-    merged_coll.insert_many([m.as_dict() for m in merged_msgs])
+        msgs_to_insert = merge_msgs_from_server(msgs_to_insert, existing_msgs)
+    if msgs_to_insert:
+        logging.info("Writing %d new messages to %r",
+                     len(msgs_to_insert), merged_msgs_coll.name)
+        merged_msgs_coll.insert_many([m.as_dict() for m in msgs_to_insert])
+    else:
+        logging.info("No new messages to insert.")
 
     # 3. Upload media files to s3
-    for fl in media_files:
-        logging.info("Uploading %r", fl['hash'])
-        upload_to_s3(s3, fl['content'], fl['hash'], bucket, fl['media_mime_type'])
+    bucket, s3 = initialize_s3()
+    for mf in media_files:
+        logging.info("Uploading %r (%s)", mf['hash'], mf['mimeType'])
+        upload_to_s3(s3, mf['content'], mf['hash'], bucket, mf['mimeType'])
     logging.info("Wrote %d files to S3. Done", len(media_files))
 
 
@@ -455,16 +496,20 @@ def group_msgs(msgs: List[Msg]) -> Dict[str, List[Msg]]:
     return dict(msgs_by_group)
 
 
-def merge_msgs_from_server(msgs: List[Msg],
-                           existing_msgs: List[dict]) -> None:
+def merge_msgs_from_server(new_msgs: List[Msg],
+                           existing_msgs: List[dict]) -> List[dict]:
     """
     Whatsapp has a 10k message limit per group. It's likely therefore that
     we will get overlapping messages and the order on the new message will be
-    wrong. This detects the overlap and updates the original msgs order
+    wrong.
+
+    This does two things:
+    1. Detects the overlap and updates the original msgs order
+    2. Removes the old messages from the messages to insert
     """
     existing_msgs = [Msg.from_dict(m) for m in existing_msgs]
     existing_msgs_by_group = group_msgs(existing_msgs)
-    msgs_by_group = group_msgs(msgs)
+    msgs_by_group = group_msgs(new_msgs)
 
     for group_key, msgs_in_new_group in msgs_by_group.items():
         msgs_in_old_group = existing_msgs_by_group.get(group_key)
@@ -480,6 +525,11 @@ def merge_msgs_from_server(msgs: List[Msg],
         # limit them and write the new messages
         msgs_not_on_mongo = merged_msgs[len(msgs_in_old_group):]
         msgs_by_group[group_key] = msgs_not_on_mongo
+
+    ret = []
+    for msgs in msgs_by_group.values():
+        ret += msgs
+    return ret
 
 
 def msg_sort(msg: Msg) -> tuple:
@@ -533,6 +583,8 @@ def check_match(msgs_a: List[Msg], msgs_b: List[Msg], offset: int):
     matches = 0
     for i in range(-1 * offset, len(msgs_a) + len(msgs_b)):
         try:
+            if i + offset < 0:
+                continue
             msg_a = msgs_a[i + offset]
         except IndexError:
             continue
@@ -591,7 +643,7 @@ def find_offset(msg_set_a: List[Msg], msg_set_b: List[Msg]) -> int:
     if possible_matches:
         return max(possible_matches.keys(),
                    key=lambda o: possible_matches[o])
-    raise AssertionError("Files do not overlap")
+    raise AssertionError("The two sets of messages do not overlap")
 
 
 def merge_two_msg_lists(msgs_a: List[Msg], msgs_b: List[Msg]) -> List[Msg]:
@@ -599,6 +651,10 @@ def merge_two_msg_lists(msgs_a: List[Msg], msgs_b: List[Msg]) -> List[Msg]:
     Given two groups of messages, which are from the same group, merge into one
     list of messages
     """
+
+    # Basic check. We can't merge if the orders within each list are not consistent
+    assert len(set(m.order for m in msgs_a)) == len(msgs_a)
+    assert len(set(m.order for m in msgs_b)) == len(msgs_b)
 
     # The code ahead assumes msgs_a is always < msgs_b. If they aren't, swap them
     if msgs_a[0].dt > msgs_b[0].dt:
@@ -624,7 +680,10 @@ def group_by_file(msgs: List[Msg]) -> Dict[int, List[Msg]]:
     msgs_by_file = collections.defaultdict(list)
     for msg in msgs:
         msgs_by_file[msg.file_idx].append(msg)
-    return dict(msgs_by_file)
+
+    msgs_by_file = {file_idx: msgs for file_idx, msgs
+                    in sorted(msgs_by_file.items(), key=lambda tup: tup[1][-1].dt)}
+    return msgs_by_file
 
 
 def merge_msgs_in_group(group_id: str, msgs_in_grp: list) -> list:
@@ -649,12 +708,12 @@ def merge_msgs_in_group(group_id: str, msgs_in_grp: list) -> list:
 
     # 2. Return if only one file came in
     if num_files == 1:
-        logging.info("No need to merge %s", group_id)
+        logging.info("Only one file in group %r. No need to merge.", group_id)
         assert set(m.order for m in msgs_in_grp) == set(range(len(msgs_in_grp)))
         return msgs_in_grp
 
     # 3. Iteratively merge different files
-    logging.info("Merging %d files from %s...", num_files, group_id)
+    logging.info("Merging %d files from group %r...", num_files, group_id)
     ret = msgs_by_file.pop()
     while msgs_by_file:
         other_msgs = msgs_by_file.pop()
@@ -669,7 +728,8 @@ def merge_msgs_in_group(group_id: str, msgs_in_grp: list) -> list:
 
     assert set(m.order for m in ret) == set(range(len(ret)))
 
-    logging.info("Merged %d files [min:%d avg:%d max:%d] to %d messages",
+    logging.info("Merged %d files [min_num_msgs:%d avg_num_msgs:%d "
+                 "max_num_msgs:%d] to %d messages",
                  num_files,
                  min_msgs_by_file,
                  avg_msgs_by_file,
@@ -699,6 +759,36 @@ def set_media_hash(media_file: dict) -> None:
     media_file['content'].seek(0)
 
 
+def validate_env_vars(local: bool, skip_media: bool,
+                      salt_not_required: bool) -> bool:
+    """
+    Validate that the necessary environmental variables are set before running
+    """
+    if 'SCRAPER_SALT' not in os.environ:
+        if salt_not_required:
+            logging.warning("The SCRAPER_SALT env is not set. "
+                            "Anonymization will not be deterministic")
+            os.environ['SCRAPER_SALT'] = secrets.token_hex()
+        else:
+            logging.error("Set the SCRAPER_SALT env variable. "
+                          "Did you `source .env`?")
+            return False
+    if not local:
+        if not all(v in os.environ for v in REQ_WHATSAPP_ENV_VARS):
+            logging.error("Missing one or more WhatsApp env variables. "
+                          "Did you `source .env`?")
+            return False
+    if not skip_media and not local:
+        if not all(v in os.environ for v in REQ_AWS_ENV_VARS):
+            logging.error("Missing one or more AWS env variables. "
+                          "Did you `source .env`?")
+            return False
+        if not AWS_BUCKET_RE.match(os.environ['AWS_BUCKET']):
+            logging.error("AWS bucket name did not match regex")
+            return False
+    return True
+
+
 def main(creds_path: str, google_drive_url: str, local: bool,
          skip_media: bool, salt_not_required: bool) -> None:
     """
@@ -706,16 +796,9 @@ def main(creds_path: str, google_drive_url: str, local: bool,
     and save messages and media.
     """
 
-    # 0. Validate salt
-    global SCRAPER_SALT
-    if not SCRAPER_SALT:
-        if salt_not_required:
-            logging.warning("The SCRAPER_SALT env is not set. "
-                            "Anonymization will not be deterministic")
-            SCRAPER_SALT = secrets.token_hex()
-        else:
-            logging.warning("Set the SCRAPER_SALT env variable. ")
-            return
+    # 0. Validate env
+    if not validate_env_vars(local, skip_media, salt_not_required):
+        return
 
     # 1. Setup google drive
     drive_url_match = GDRIVE_RE.match(google_drive_url)
@@ -763,13 +846,13 @@ def main(creds_path: str, google_drive_url: str, local: bool,
             media_msg.process_media_msg()
 
     # 6. Merge messages from identical files together
-    merged_msgs = merge_all_msgs(msgs)
+    msgs_to_insert = merge_all_msgs(msgs)
 
     # 7. Save
     if local:
-        save_to_local(drive_id, msgs, merged_msgs, media_files, skip_media)
+        save_to_local(drive_id, msgs, msgs_to_insert, media_files, skip_media)
         return
-    save_to_server(msgs, merged_msgs, media_files)
+    save_to_remote(msgs, msgs_to_insert, media_files, drive_id)
 
 
 if __name__ == '__main__':

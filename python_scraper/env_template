@@ -1,0 +1,13 @@
+set -a
+
+SCRAPER_SALT=<any random string for deterministic anonymization. Hint: python -c "import secrets; print(secrets.token_hex())">
+
+WHATSAPP_DB_USERNAME=<your whatsapp username>
+WHATSAPP_DB_PASSWORD=<your whatsapp password>
+WHATSAPP_DB_NAME=<your whatsapp database>
+WHATSAPP_ALL_FILES_DB_COLLECTION=<the collection where all processed files will go. This is for disaster recovery>
+WHATSAPP_MERGED_MSGS_DB_COLLECTION=<the collection where msgs go. Consider this the primary collection>
+
+AWS_ACCESS_KEY_ID=<your aws access key id>
+AWS_SECRET_ACCESS_KEY=<your aws secret access key id>
+AWS_BUCKET=<aws bucket name (skip the ARN)>

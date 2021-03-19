@@ -6,3 +6,4 @@ python_scraper/*.pickle
 __pycache__
 .coverage
 htmlcov
+.env

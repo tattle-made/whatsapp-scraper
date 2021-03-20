@@ -1,3 +1,6 @@
+**Before using this code, kindly review the check-list for [responsible data collection practices.](https://tattle.co.in/products/closed-messaging-checklist/)**
+**Tattle's design decision for secure data collection are listed on the [Tattle site](https://tattle.co.in/products/whatsapp-archiver)**
+
 Tattle WhatsApp dump processor.
 
 Use this to convert WhatsApp dumps into structured data. This script will either upload the data and media to Tattle's data storage (MongoDB and S3) or save files locally depending on command line arguments.

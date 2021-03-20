@@ -1,5 +1,6 @@
 **Before using this code, kindly review the check-list for [responsible data collection practices.](https://tattle.co.in/products/closed-messaging-checklist/)**
-**Tattle's design decision for secure data collection are listed on the [Tattle site](https://tattle.co.in/products/whatsapp-archiver)**
+
+**Tattle's design decision for secure data collection are listed on the [Tattle site.](https://tattle.co.in/products/whatsapp-archiver)**
 
 Tattle WhatsApp dump processor.
 

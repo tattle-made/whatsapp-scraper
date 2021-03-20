@@ -3,7 +3,7 @@
 **Tattle's design decision for secure data collection are listed on the [Tattle site.](https://tattle.co.in/products/whatsapp-archiver)**
 
 
-## Tattle WhatsApp Export Chat Feature Processor.
+## Tattle WhatsApp Exported Chat Dump Processor.
 
 Use this to convert WhatsApp dumps into structured data. This script will either upload the data and media to Tattle's data storage (MongoDB and S3) or save files locally depending on command line arguments.
 

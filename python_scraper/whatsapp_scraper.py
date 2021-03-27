@@ -95,7 +95,7 @@ class Msg():
                                         self.content[:50].replace('\n', '\\n'))
 
     def __eq__(self, other):
-        return (self.dt == other.dt
+        return (abs((self.dt - other.dt).total_seconds()) <= 120
                 and self.sender_id == other.sender_id
                 and self.group_id == other.group_id
                 and self.content == other.content)

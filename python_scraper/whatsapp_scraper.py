@@ -321,6 +321,7 @@ def process_text_file(text_file: dict, media_files_by_name: dict,
             if current_msg:
                 msgs.append(current_msg)
                 current_msg = None
+            continue
         if msg_match := MSG_LINE.match(content_line):
             if current_msg:
                 msgs.append(current_msg)
@@ -328,6 +329,10 @@ def process_text_file(text_file: dict, media_files_by_name: dict,
             continue
         if current_msg:
             current_msg.add_content_line(content_line)
+            continue
+        if not content_line.strip():
+            continue
+        raise AssertionError("Unhandled message %r" % content_line)
     if current_msg:
         msgs.append(current_msg)
 

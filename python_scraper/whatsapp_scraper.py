@@ -28,12 +28,13 @@ SCOPES = ('https://www.googleapis.com/auth/drive.readonly',)
 MSG_DELETED = "This message was deleted"
 MEDIA_OMITTED = "<Media omitted>"
 SKIP_MSGS = (MSG_DELETED, MEDIA_OMITTED)
-ACTION_LINE = re.compile(r"(?P<day>[0-9]+/[0-9]+/[0-9]+), (?P<tm>[0-9]+:[0-9]+ (am|pm)) - (?P<tail>[^:]+)$", re.IGNORECASE)
-MSG_LINE = re.compile(r"(?P<day>[0-9]+/[0-9]+/[0-9]+), (?P<tm>[0-9]+:[0-9]+ (am|pm)) - (?P<sn>[^:]+): (?P<tail>.*?)$", re.IGNORECASE)
+ACTION_LINE = re.compile(r"(?P<day>[0-9]+/[0-9]+/[0-9]+), (?P<tm>[0-9]+:[0-9]+( am| pm|)) - (?P<tail>[^:]+)$", re.IGNORECASE)
+MSG_LINE = re.compile(r"(?P<day>[0-9]+/[0-9]+/[0-9]+), (?P<tm>[0-9]+:[0-9]+( am| pm|)) - (?P<sn>[^:]+): (?P<tail>.*?)$", re.IGNORECASE)
 FILE_ATTACHED_RE = re.compile(r"(?P<fn>.*?) \(file attached\)")
 GDRIVE_RE = re.compile(r"(?:https://|)drive\.google\.com/.*?/folders/(?P<drive_id>[a-zA-Z0-9_-]+)")
 AWS_BUCKET_RE = re.compile(r"^[a-zA-Z0-9.\-_]{1,255}$")
 DAY_FMT = "%d/%m/%y"
+DAY_FMT_2 = "%d/%m/%Y"
 MINUTES = datetime.timedelta(seconds=60)
 GOOGLE_DRIVE = "GOOGLE_DRIVE"
 REQ_WHATSAPP_ENV_VARS = (
@@ -103,7 +104,10 @@ class Msg():
     @staticmethod
     def create(match: re.Match, group_id: str, file_idx: int, source_loc: str):
         day_raw = match['day']
-        day = datetime.datetime.strptime(day_raw, DAY_FMT).date()
+        try:
+            day = datetime.datetime.strptime(day_raw, DAY_FMT).date()
+        except ValueError:
+            day = datetime.datetime.strptime(day_raw, DAY_FMT_2).date()
         tm_raw = match['tm']
         tm = dt_parser.parse(tm_raw).time()
         return Msg(
@@ -307,7 +311,6 @@ def process_text_file(text_file: dict, media_files_by_name: dict,
 
     # 1. Build up the messages line-by-line
     group_id = encrypt_string(text_file['name'])
-    print("pair", text_file['name'], group_id)
     msgs = []
     content_lines = text_file['content'].read().decode().split('\n')
     current_msg = None
@@ -339,7 +342,7 @@ def process_text_file(text_file: dict, media_files_by_name: dict,
                 media_file = media_files_by_name.get(attach_match['fn'])
                 msg.make_media_msg(media_file)
 
-    logging.info("Processed WhatsApp group %r", group_id)
+    logging.info("Processed WhatsApp group %r with %d messages", group_id, len(msgs))
     return msgs
 
 

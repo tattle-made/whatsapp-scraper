@@ -43,6 +43,7 @@ Add your real credentials to the .env file. Then, before running whatsapp_scrape
 ### Testing
 
     ./test.sh
+        - If there is a specific message missing from one chat but not another, when the two chat files overlap on time, the scraper throws an assertion error: 'The Two Sets of Messages Do Not Overlap'. So far we have not seen this happen. 
 
 The test.sh file uses the coverage python module. You can see the code coverage with
 
